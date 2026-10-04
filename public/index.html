@@ -32,8 +32,14 @@
         <p class="hint" id="locate-status" aria-live="polite">Stores are sorted by distance from ANU.</p>
       </section>
 
-      <form id="post" class="card post" novalidate>
-        <h2>What did you spot?</h2>
+      <!-- most visitors come to browse, so the form stays folded until asked for -->
+      <button type="button" id="post-toggle" class="post-toggle" aria-expanded="false" aria-controls="post">+ Post a special</button>
+
+      <form id="post" class="card post" novalidate hidden>
+        <div class="post-head">
+          <h2>What did you spot?</h2>
+          <button type="button" id="post-close" class="quiet small">Cancel</button>
+        </div>
         <div class="grid">
           <label class="wide">Store <select name="storeId" required></select></label>
           <label class="wide">Item <input name="product" maxlength="80" required placeholder="e.g. Tim Tams 200g" /></label>

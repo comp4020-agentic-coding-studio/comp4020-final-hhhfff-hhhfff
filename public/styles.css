@@ -34,9 +34,15 @@ body {
   padding: 1rem 0 0.75rem;
 }
 
-.masthead h1 {
+.masthead h1,
+.masthead .title {
   margin: 0;
   font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.masthead .title a {
+  text-decoration: none;
 }
 
 .tagline {
@@ -130,6 +136,27 @@ button.small {
 .tag {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* an empty tag still takes a gap in the row, which narrows the input beside it */
+.tag:empty {
+  display: none;
+}
+
+.post-toggle {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.post-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
 }
 
 .hint {
@@ -484,12 +511,24 @@ button.danger {
   white-space: nowrap;
 }
 
-/* the /readme/ page */
-.readme nav,
+/* the /readme/ page keeps a reading width at any screen size */
 .readme main {
   max-width: 44rem;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 1rem 1rem 3rem;
+}
+
+.readme .masthead a {
+  color: inherit;
+}
+
+/* the header lines up with the text below it, not with the wide feed */
+.readme .wrap {
+  max-width: 44rem;
+}
+
+.readme main a {
+  color: var(--accent);
 }
 
 .readme main img {
@@ -499,6 +538,63 @@ button.danger {
 @media (max-width: 30rem) {
   .post .grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Wide screens: the controls and forms keep a comfortable width, and the
+   feed spreads into columns so more specials fit on one screen. */
+/* Tablet and up: the feed goes into columns (two, then three from 64rem) and
+   the post button spans it edge to edge with its outer cards. */
+@media (min-width: 44rem) {
+  .wrap {
+    max-width: 76rem;
+  }
+
+  /* the controls sit in a centred column above the feed; the post button
+     spans the feed itself, edge to edge with its outer cards */
+  .notices,
+  .me,
+  .filters,
+  .post,
+  .similar {
+    max-width: 44rem;
+    margin-inline: auto;
+  }
+
+  body:not(.readme) .masthead .wrap {
+    text-align: center;
+  }
+
+  .filters .hint {
+    text-align: center;
+  }
+
+  /* equal columns filling the centred .wrap, the same width as the post button */
+  .feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (min-width: 64rem) {
+  .feed {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Where columns leave a card narrow (two on a tablet, three on a small
+   laptop), tighten it so the four stock buttons stay on one line. */
+@media (min-width: 44rem) and (max-width: 52rem), (min-width: 64rem) and (max-width: 80rem) {
+  .deal {
+    padding: 0.85rem;
+  }
+
+  .stock {
+    gap: 0.25rem;
+  }
+
+  .stock button {
+    padding: 0.25rem 0.45rem;
   }
 }
 

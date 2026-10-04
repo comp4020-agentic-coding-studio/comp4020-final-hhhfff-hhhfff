@@ -538,6 +538,33 @@ post.addEventListener("submit", async (e) => {
   }
 });
 
+// The form is folded behind #post-toggle until someone wants to post; while
+// it (or the "already posted?" check) is open, the toggle steps aside.
+const toggle = $("#post-toggle");
+
+function openPost() {
+  similar.hidden = true;
+  post.hidden = false;
+  toggle.hidden = true;
+  toggle.setAttribute("aria-expanded", "true");
+  post.elements.storeId.focus();
+}
+
+function closePost({ refocus = false } = {}) {
+  similar.hidden = true;
+  post.hidden = true;
+  toggle.hidden = false;
+  toggle.setAttribute("aria-expanded", "false");
+  $("#post-error").textContent = "";
+  if (refocus) toggle.focus();
+}
+
+toggle.addEventListener("click", openPost);
+$("#post-close").addEventListener("click", () => closePost({ refocus: true }));
+for (const panel of [post, similar]) {
+  panel.addEventListener("keydown", (e) => e.key === "Escape" && closePost({ refocus: true }));
+}
+
 function showSimilar(matches) {
   $("#similar-list").replaceChildren(...matches.map(similarItem));
   // you can't post a second copy of your own, so "post mine" only makes sense
@@ -548,9 +575,9 @@ function showSimilar(matches) {
   similar.focus();
 }
 
+// the special has been dealt with (posted, confirmed or corrected): fold up
 function closeSimilar(message) {
-  similar.hidden = true;
-  post.hidden = false;
+  closePost();
   draft = null;
   if (message) $("#feed-status").textContent = message;
 }
@@ -661,14 +688,14 @@ async function applyDifferences(m, fields, li) {
 $("#post-anyway").addEventListener("click", async () => {
   try {
     await publish();
-    closeSimilar();
   } catch (err) {
     alertIn(similar, err.message);
   }
 });
 
 $("#similar-cancel").addEventListener("click", () => {
-  closeSimilar();
+  draft = null;
+  openPost();
   post.elements.product.focus();
 });
 
@@ -677,7 +704,8 @@ async function publish() {
     const deal = await api("/api/deals", { ...draft, author: author() });
     clearPost();
     replaceOrAdd(deal);
-    draft = null;
+    closeSimilar(`Posted “${deal.item}”.`);
+    jumpTo(deal.id);
   } catch (err) {
     // the server's one-post-per-person rule: show the post that's already there
     if (err.status === 409 && err.data.existing) {

@@ -181,7 +181,12 @@ async function sendReadme(res: ServerResponse): Promise<void> {
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="readme">
-<nav><a href="/">← Back to the specials</a></nav>
+<header class="masthead">
+<div class="wrap">
+<p class="title"><a href="/">discountShow</a></p>
+<p class="tagline"><a href="/">← Back to the specials</a></p>
+</div>
+</header>
 <main>${body}</main>
 </body>
 </html>`);

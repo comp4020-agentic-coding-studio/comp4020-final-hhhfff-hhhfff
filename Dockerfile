@@ -14,6 +14,8 @@ RUN pnpm install --prod --frozen-lockfile
 COPY server ./server
 COPY public ./public
 COPY README.md ./
+# images the README links to, served under /readme/docs/
+COPY docs ./docs
 
 # /data is the Fly volume (fly.toml); the database lives there
 ENV NODE_ENV=production DATA_DIR=/data
