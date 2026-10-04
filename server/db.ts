@@ -1,18 +1,44 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { itemKey, SIMILAR_ENOUGH, similarity } from "./match.ts";
 
 // Everything that persists lives in one SQLite file on the Fly volume (/data
 // in the image; ./data when run locally). Prices are integer cents.
 
 export const STOCK_LEVELS = ["plenty", "some", "few", "gone"] as const;
 export const SOURCES = ["in-store", "store-website", "catalogue", "word-of-mouth"] as const;
+// The fields a correction can change. Stock isn't one: anyone can already set it.
+export const CORRECTABLE = ["item", "wasCents", "nowCents", "endsOn"] as const;
+// This many different people (not the poster) proposing the same new value
+// for the same field rewrites the deal. The poster's own correction applies at once.
+export const CORRECTION_QUORUM = 3;
+
 export type Stock = (typeof STOCK_LEVELS)[number];
 export type Source = (typeof SOURCES)[number];
+export type Field = (typeof CORRECTABLE)[number];
+// A field's value as the database holds it: text, cents, or a date / null.
+export type Value = string | number | null;
 
 export interface Author {
   id: string;
   name: string;
+}
+
+export interface PendingCorrection {
+  field: Field;
+  value: Value;
+  votes: number;
+  voters: Author[];
+  notes: string[];
+}
+
+export interface AppliedCorrection {
+  field: Field;
+  from: Value;
+  to: Value;
+  by: "poster" | "crowd";
+  at: string;
 }
 
 export interface Deal {
@@ -29,6 +55,10 @@ export interface Deal {
   stockBy: Author;
   stockAt: string;
   comments: number;
+  confirmations: number;
+  confirmedBy: Author[];
+  pending: PendingCorrection[];
+  history: AppliedCorrection[];
 }
 
 export interface Comment {
@@ -36,6 +66,13 @@ export interface Comment {
   dealId: number;
   body: string;
   author: Author;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: number;
+  dealId: number;
+  text: string;
   createdAt: string;
 }
 
@@ -79,12 +116,95 @@ db.exec(`
     created_at  TEXT NOT NULL
   );
 
+  -- "I saw this too, and it's right": once per person per deal
+  CREATE TABLE IF NOT EXISTS confirmations (
+    deal_id     INTEGER NOT NULL REFERENCES deals(id),
+    author_id   TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    PRIMARY KEY (deal_id, author_id)
+  );
+
+  -- A proposal to change one field. While resolved_at is null it's a vote;
+  -- once applied, applied_at and previous record the change. A person has at
+  -- most one open proposal per field (a new one replaces it).
+  CREATE TABLE IF NOT EXISTS corrections (
+    id          INTEGER PRIMARY KEY,
+    deal_id     INTEGER NOT NULL REFERENCES deals(id),
+    field       TEXT NOT NULL,
+    value       TEXT,
+    note        TEXT,
+    author_id   TEXT NOT NULL,
+    author_name TEXT NOT NULL,
+    created_at  TEXT NOT NULL,
+    resolved_at TEXT,
+    applied_at  TEXT,
+    previous    TEXT,
+    applied_by  TEXT
+  );
+
+  -- messages for a poster about their deals, shown next time they open the app
+  CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY,
+    author_id  TEXT NOT NULL,
+    deal_id    INTEGER NOT NULL REFERENCES deals(id),
+    text       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    seen_at    TEXT
+  );
+
   CREATE INDEX IF NOT EXISTS deals_store ON deals(store_id, created_at);
   CREATE INDEX IF NOT EXISTS stock_deal ON stock_reports(deal_id, id);
   CREATE INDEX IF NOT EXISTS comments_deal ON comments(deal_id, id);
+  CREATE INDEX IF NOT EXISTS corrections_deal ON corrections(deal_id, resolved_at);
+  CREATE INDEX IF NOT EXISTS notifications_author ON notifications(author_id, seen_at);
 `);
 
+// --- migrations for databases created by an earlier version
+
+const columns = (table: string): string[] =>
+  db.prepare(`PRAGMA table_info(${table})`).all().map((c) => (c as { name: string }).name);
+
+if (!columns("deals").includes("item_key")) {
+  db.exec(`ALTER TABLE deals ADD COLUMN item_key TEXT`);
+  const set = db.prepare(`UPDATE deals SET item_key = ? WHERE id = ?`);
+  for (const r of db.prepare(`SELECT id, item FROM deals`).all() as { id: number; item: string }[]) {
+    set.run(itemKey(r.item), r.id);
+  }
+}
+db.exec(`CREATE INDEX IF NOT EXISTS deals_dupe ON deals(author_id, store_id, item_key)`);
+
+// ---
+
 const now = (): string => new Date().toISOString();
+
+function tx<T>(fn: () => T): T {
+  db.exec("BEGIN");
+  try {
+    const out = fn();
+    db.exec("COMMIT");
+    return out;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
+
+const COLUMN: Record<Field, string> = {
+  item: "item",
+  wasCents: "was_cents",
+  nowCents: "now_cents",
+  endsOn: "ends_on",
+};
+
+// Corrections store their value as text; prices come back as numbers.
+const encode = (v: Value): string | null => (v === null ? null : String(v));
+const decode = (field: Field, v: unknown): Value =>
+  v === null || v === undefined ? null : field === "wasCents" || field === "nowCents" ? Number(v) : String(v);
+
+// Two proposals for the item name agree if they key the same, so "Tim Tams
+// 200 g" and "tim tams 200g" are one vote, not two.
+const voteKey = (field: Field, v: Value): string => (field === "item" && typeof v === "string" ? itemKey(v) : String(v));
 
 const selectDeals = `
   SELECT d.*,
@@ -97,9 +217,47 @@ const selectDeals = `
 
 type Row = Record<string, unknown>;
 
+function pendingFor(dealId: number): PendingCorrection[] {
+  const rows = db
+    .prepare(`SELECT * FROM corrections WHERE deal_id = ? AND resolved_at IS NULL ORDER BY id`)
+    .all(dealId) as Row[];
+  const groups = new Map<string, PendingCorrection>();
+  for (const r of rows) {
+    const field = r.field as Field;
+    const value = decode(field, r.value);
+    const key = `${field}\u0000${voteKey(field, value)}`;
+    const g = groups.get(key) ?? { field, value, votes: 0, voters: [], notes: [] };
+    g.votes += 1;
+    g.voters.push({ id: r.author_id as string, name: r.author_name as string });
+    if (r.note) g.notes.push(r.note as string);
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => b.votes - a.votes);
+}
+
+function historyFor(dealId: number): AppliedCorrection[] {
+  const rows = db
+    .prepare(`SELECT * FROM corrections WHERE deal_id = ? AND applied_at IS NOT NULL ORDER BY applied_at, id`)
+    .all(dealId) as Row[];
+  return rows.map((r) => {
+    const field = r.field as Field;
+    return {
+      field,
+      from: decode(field, r.previous),
+      to: decode(field, r.value),
+      by: r.applied_by as "poster" | "crowd",
+      at: r.applied_at as string,
+    };
+  });
+}
+
 function toDeal(r: Row): Deal {
+  const id = r.id as number;
+  const confirmedBy = (
+    db.prepare(`SELECT author_id, author_name FROM confirmations WHERE deal_id = ? ORDER BY created_at`).all(id) as Row[]
+  ).map((c) => ({ id: c.author_id as string, name: c.author_name as string }));
   return {
-    id: r.id as number,
+    id,
     storeId: r.store_id as string,
     item: r.item as string,
     wasCents: r.was_cents as number,
@@ -112,13 +270,19 @@ function toDeal(r: Row): Deal {
     stockBy: { id: r.stock_author_id as string, name: r.stock_author_name as string },
     stockAt: r.stock_at as string,
     comments: Number(r.comments),
+    confirmations: confirmedBy.length,
+    confirmedBy,
+    pending: pendingFor(id),
+    history: historyFor(id),
   };
 }
+
+const active = `(d.ends_on IS NULL OR d.ends_on >= ?)`;
 
 // Deals that ended before `sinceEndsOn` (a YYYY-MM-DD date) drop out of the
 // feed; they stay in the database.
 export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
-  const where = `WHERE (d.ends_on IS NULL OR d.ends_on >= ?)` + (storeId ? ` AND d.store_id = ?` : "");
+  const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
   const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
   const rows = db.prepare(`${selectDeals} ${where} ORDER BY d.created_at DESC LIMIT 200`).all(...args);
   return rows.map((r) => toDeal(r as Row));
@@ -127,6 +291,29 @@ export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
 export function getDeal(id: number): Deal | null {
   const row = db.prepare(`${selectDeals} WHERE d.id = ?`).get(id);
   return row ? toDeal(row as Row) : null;
+}
+
+// Active deals at one store whose item looks like `item`, closest first.
+export function similarDeals(storeId: string, item: string, today: string): (Deal & { score: number })[] {
+  const rows = db.prepare(`SELECT d.id, d.item FROM deals d WHERE d.store_id = ? AND ${active}`).all(storeId, today) as {
+    id: number;
+    item: string;
+  }[];
+  return rows
+    .map((r) => ({ id: r.id, score: similarity(item, r.item) }))
+    .filter((r) => r.score >= SIMILAR_ENOUGH)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((r) => ({ ...getDeal(r.id)!, score: Math.round(r.score * 100) / 100 }));
+}
+
+// The one-post-per-person rule: this person's active deal for the same item
+// at the same store, if there is one.
+export function ownDuplicate(authorId: string, storeId: string, item: string, today: string): Deal | null {
+  const row = db
+    .prepare(`SELECT d.id FROM deals d WHERE d.author_id = ? AND d.store_id = ? AND d.item_key = ? AND ${active}`)
+    .get(authorId, storeId, itemKey(item), today) as { id: number } | undefined;
+  return row ? getDeal(row.id) : null;
 }
 
 export interface NewDeal {
@@ -142,29 +329,135 @@ export interface NewDeal {
 
 export function createDeal(d: NewDeal): Deal {
   const at = now();
-  db.exec("BEGIN");
-  try {
+  const id = tx(() => {
     const { lastInsertRowid } = db
       .prepare(
-        `INSERT INTO deals (store_id, item, was_cents, now_cents, ends_on, source, author_id, author_name, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO deals (store_id, item, item_key, was_cents, now_cents, ends_on, source, author_id, author_name, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(d.storeId, d.item, d.wasCents, d.nowCents, d.endsOn, d.source, d.author.id, d.author.name, at);
+      .run(d.storeId, d.item, itemKey(d.item), d.wasCents, d.nowCents, d.endsOn, d.source, d.author.id, d.author.name, at);
     db.prepare(
       `INSERT INTO stock_reports (deal_id, stock, author_id, author_name, created_at) VALUES (?, ?, ?, ?, ?)`,
     ).run(lastInsertRowid, d.stock, d.author.id, d.author.name, at);
-    db.exec("COMMIT");
-    return getDeal(Number(lastInsertRowid))!;
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
+    return Number(lastInsertRowid);
+  });
+  return getDeal(id)!;
 }
 
 export function reportStock(dealId: number, stock: Stock, author: Author): void {
   db.prepare(
     `INSERT INTO stock_reports (deal_id, stock, author_id, author_name, created_at) VALUES (?, ?, ?, ?, ?)`,
   ).run(dealId, stock, author.id, author.name, now());
+}
+
+// Returns false if this person had already confirmed it.
+export function confirmDeal(dealId: number, author: Author): boolean {
+  const { changes } = db
+    .prepare(
+      `INSERT INTO confirmations (deal_id, author_id, author_name, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (deal_id, author_id) DO NOTHING`,
+    )
+    .run(dealId, author.id, author.name, now());
+  return Number(changes) > 0;
+}
+
+export function fieldValue(deal: Deal, field: Field): Value {
+  return deal[field];
+}
+
+const FIELD_TEXT: Record<Field, string> = {
+  item: "item name",
+  wasCents: "usual price",
+  nowCents: "special price",
+  endsOn: "end date",
+};
+
+const show = (field: Field, v: Value): string =>
+  v === null ? "no end date" : field === "wasCents" || field === "nowCents" ? `$${(Number(v) / 100).toFixed(2)}` : String(v);
+
+export interface CorrectionResult {
+  applied: boolean;
+  votes: number;
+  needed: number;
+}
+
+// Records `author`'s proposal and applies it if it now carries: at once for
+// the poster, or when CORRECTION_QUORUM other people agree on the same value.
+// `fits` re-checks the deal as it would be after the change (e.g. the special
+// still cheaper than usual); a change that wouldn't fit stays a proposal.
+export function proposeCorrection(
+  dealId: number,
+  field: Field,
+  value: Value,
+  note: string | null,
+  author: Author,
+  fits: (after: Deal) => boolean,
+): CorrectionResult {
+  return tx(() => {
+    const at = now();
+    const deal = getDeal(dealId)!;
+    const byPoster = author.id === deal.author.id;
+
+    db.prepare(`DELETE FROM corrections WHERE deal_id = ? AND field = ? AND author_id = ? AND resolved_at IS NULL`).run(
+      dealId,
+      field,
+      author.id,
+    );
+    const { lastInsertRowid } = db
+      .prepare(
+        `INSERT INTO corrections (deal_id, field, value, note, author_id, author_name, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(dealId, field, encode(value), note, author.id, author.name, at);
+
+    const agree = pendingFor(dealId).find((p) => p.field === field && voteKey(field, p.value) === voteKey(field, value))!;
+    const votes = agree.voters.filter((v) => v.id !== deal.author.id).length;
+    const carries = byPoster || votes >= CORRECTION_QUORUM;
+    if (!carries || !fits({ ...deal, [field]: value })) {
+      return { applied: false, votes, needed: CORRECTION_QUORUM };
+    }
+
+    const previous = fieldValue(deal, field);
+    const extra = field === "item" ? `, item_key = ?` : "";
+    const args: (string | number | null)[] = field === "item" ? [value, itemKey(String(value))] : [value];
+    db.prepare(`UPDATE deals SET ${COLUMN[field]} = ?${extra} WHERE id = ?`).run(...args, dealId);
+    // this proposal is the applied one; every other open one for the field is settled by it
+    db.prepare(
+      `UPDATE corrections SET applied_at = ?, previous = ?, applied_by = ?, resolved_at = ? WHERE id = ?`,
+    ).run(at, encode(previous), byPoster ? "poster" : "crowd", at, lastInsertRowid);
+    db.prepare(`UPDATE corrections SET resolved_at = ? WHERE deal_id = ? AND field = ? AND resolved_at IS NULL`).run(
+      at,
+      dealId,
+      field,
+    );
+
+    if (!byPoster) {
+      db.prepare(`INSERT INTO notifications (author_id, deal_id, text, created_at) VALUES (?, ?, ?, ?)`).run(
+        deal.author.id,
+        dealId,
+        `${votes} people corrected the ${FIELD_TEXT[field]} on your post "${deal.item}": ` +
+          `${show(field, previous)} → ${show(field, value)}.`,
+        at,
+      );
+    }
+    return { applied: true, votes, needed: CORRECTION_QUORUM };
+  });
+}
+
+// Unseen notifications for this person, marked seen as they're handed over.
+export function takeNotifications(authorId: string): Notification[] {
+  return tx(() => {
+    const rows = db
+      .prepare(`SELECT * FROM notifications WHERE author_id = ? AND seen_at IS NULL ORDER BY id`)
+      .all(authorId) as Row[];
+    db.prepare(`UPDATE notifications SET seen_at = ? WHERE author_id = ? AND seen_at IS NULL`).run(now(), authorId);
+    return rows.map((r) => ({
+      id: r.id as number,
+      dealId: r.deal_id as number,
+      text: r.text as string,
+      createdAt: r.created_at as string,
+    }));
+  });
 }
 
 export function listComments(dealId: number): Comment[] {

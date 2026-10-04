@@ -1,20 +1,31 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { marked } from "marked";
 import {
   addComment,
+  confirmDeal,
+  CORRECTABLE,
   createDeal,
+  fieldValue,
   getDeal,
   listComments,
   listDeals,
+  ownDuplicate,
+  proposeCorrection,
   reportStock,
+  similarDeals,
   SOURCES,
   STOCK_LEVELS,
+  takeNotifications,
   type Author,
+  type Field,
   type Source,
   type Stock,
+  type Value,
 } from "./db.ts";
+import { itemKey } from "./match.ts";
 import { STORES, storeById } from "./stores.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -22,9 +33,11 @@ const MAX_BODY = 8 * 1024;
 
 class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  extra: Record<string, unknown>;
+  constructor(status: number, message: string, extra: Record<string, unknown> = {}) {
     super(message);
     this.status = status;
+    this.extra = extra;
   }
 }
 
@@ -57,13 +70,36 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
   return v as T;
 }
 
+// A browser holds a secret key and sends it with every write; the server only
+// ever stores and shows a hash of it. The public id appears in every API
+// response, so it can't be what proves who you are: knowing it lets nobody
+// post, confirm or correct as you.
+const publicId = (key: string): string => createHash("sha256").update(key).digest("hex").slice(0, 16);
+
 function author(v: unknown): Author {
   const a = (v ?? {}) as Record<string, unknown>;
-  if (typeof a.id !== "string" || !/^[A-Za-z0-9-]{8,64}$/.test(a.id)) {
-    throw new HttpError(400, "author id is missing or malformed");
+  if (typeof a.key !== "string" || !/^[A-Za-z0-9-]{16,64}$/.test(a.key)) {
+    throw new HttpError(400, "author key is missing or malformed");
   }
-  return { id: a.id, name: str(a.name, "nickname", 1, 24) };
+  return { id: publicId(a.key), name: str(a.name, "nickname", 1, 24) };
 }
+
+// A correction's new value, checked the same way as when the deal was posted.
+function fieldInput(field: Field, v: unknown): Value {
+  switch (field) {
+    case "item":
+      return str(v, "item", 2, 80);
+    case "wasCents":
+      return cents(v, "usual price");
+    case "nowCents":
+      return cents(v, "special price");
+    case "endsOn":
+      return endsOn(v);
+  }
+}
+
+const sameValue = (field: Field, a: Value, b: Value): boolean =>
+  field === "item" ? itemKey(String(a)) === itemKey(String(b)) : a === b;
 
 function endsOn(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
@@ -173,17 +209,65 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const wasCents = cents(b.wasCents, "usual price");
     const nowCents = cents(b.nowCents, "special price");
     if (nowCents >= wasCents) throw new HttpError(400, "the special price has to be lower than the usual price");
+    const item = str(b.item, "item", 2, 80);
+    const who = author(b.author);
+    // one post per person per item per store while it's running: a change
+    // to your own special is a correction, not a second post
+    const existing = ownDuplicate(who.id, storeId, item, todayInCanberra());
+    if (existing) {
+      throw new HttpError(409, "you've already posted this item at this store; correct that post instead", {
+        existing,
+      });
+    }
     const deal = createDeal({
       storeId,
-      item: str(b.item, "item", 2, 80),
+      item,
       wasCents,
       nowCents,
       endsOn: endsOn(b.endsOn),
       stock: oneOf<Stock>(b.stock, STOCK_LEVELS, "stock"),
       source: oneOf<Source>(b.source, SOURCES, "source"),
-      author: author(b.author),
+      author: who,
     });
     return send(res, 201, deal);
+  }
+
+  // possible duplicates, shown before posting so people join a deal instead of repeating it
+  if (method === "GET" && path === "/api/deals/similar") {
+    const store = url.searchParams.get("store") ?? "";
+    if (!storeById.has(store)) throw new HttpError(404, "no such store");
+    const item = str(url.searchParams.get("item"), "item", 2, 80);
+    return send(res, 200, similarDeals(store, item, todayInCanberra()));
+  }
+
+  if ((m = path.match(/^\/api\/deals\/(\d+)\/confirm$/)) && method === "POST") {
+    const id = dealId(m[1]);
+    const who = author((await readJson(req)).author);
+    if (getDeal(id)!.author.id === who.id) throw new HttpError(400, "that's your own post");
+    const added = confirmDeal(id, who);
+    return send(res, added ? 201 : 200, getDeal(id));
+  }
+
+  if ((m = path.match(/^\/api\/deals\/(\d+)\/corrections$/)) && method === "POST") {
+    const id = dealId(m[1]);
+    const b = await readJson(req);
+    const field = oneOf<Field>(b.field, CORRECTABLE, "field");
+    const value = fieldInput(field, b.value);
+    const note = b.note === undefined || b.note === null || b.note === "" ? null : str(b.note, "note", 1, 280);
+    const who = author(b.author);
+    const deal = getDeal(id)!;
+    if (sameValue(field, fieldValue(deal, field), value)) throw new HttpError(400, "that's what the post already says");
+    const after = { ...deal, [field]: value };
+    if (after.nowCents >= after.wasCents) {
+      throw new HttpError(400, "the special price has to stay lower than the usual price");
+    }
+    const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents);
+    return send(res, result.applied ? 200 : 201, { ...result, deal: getDeal(id) });
+  }
+
+  // a poster's unseen notifications, handed over once
+  if (method === "POST" && path === "/api/notifications") {
+    return send(res, 200, takeNotifications(author((await readJson(req)).author).id));
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)$/)) && method === "GET") {
@@ -221,7 +305,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 const server = createServer((req, res) => {
   route(req, res).catch((err: unknown) => {
     if (err instanceof HttpError) {
-      if (req.url?.startsWith("/api/")) return send(res, err.status, { error: err.message });
+      if (req.url?.startsWith("/api/")) return send(res, err.status, { error: err.message, ...err.extra });
       res.writeHead(err.status, { "content-type": "text/plain; charset=utf-8" });
       return void res.end(err.message);
     }
