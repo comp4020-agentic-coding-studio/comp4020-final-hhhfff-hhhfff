@@ -8,6 +8,7 @@ import {
   confirmDeal,
   CORRECTABLE,
   createDeal,
+  deleteDeal,
   fieldValue,
   getDeal,
   listComments,
@@ -238,6 +239,15 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (!storeById.has(store)) throw new HttpError(404, "no such store");
     const item = str(url.searchParams.get("item"), "item", 2, 80);
     return send(res, 200, similarDeals(store, item, todayInCanberra()));
+  }
+
+  // only the poster can take a post down, whoever else has added to it
+  if ((m = path.match(/^\/api\/deals\/(\d+)\/delete$/)) && method === "POST") {
+    const id = dealId(m[1]);
+    const who = author((await readJson(req)).author);
+    if (getDeal(id)!.author.id !== who.id) throw new HttpError(403, "only the person who posted this can delete it");
+    deleteDeal(id);
+    return send(res, 200, { deleted: id });
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/confirm$/)) && method === "POST") {

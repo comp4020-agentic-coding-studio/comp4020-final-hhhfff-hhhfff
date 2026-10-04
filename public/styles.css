@@ -450,6 +450,26 @@ button.small {
   gap: 0.5rem;
 }
 
+.delete {
+  margin: 0 0 0.6rem;
+}
+
+.delete-confirm {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.delete-confirm p {
+  margin: 0 0 0.4rem;
+  font-size: 0.9rem;
+}
+
+button.danger {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .deal.flash {
   outline: 3px solid var(--focus);
   outline-offset: 2px;

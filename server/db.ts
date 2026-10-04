@@ -174,6 +174,12 @@ if (!columns("deals").includes("item_key")) {
 }
 db.exec(`CREATE INDEX IF NOT EXISTS deals_dupe ON deals(author_id, store_id, item_key)`);
 
+// A deleted deal is hidden, not removed: other people's comments,
+// confirmations and corrections on it stay in the database.
+if (!columns("deals").includes("deleted_at")) {
+  db.exec(`ALTER TABLE deals ADD COLUMN deleted_at TEXT`);
+}
+
 // ---
 
 const now = (): string => new Date().toISOString();
@@ -277,7 +283,8 @@ function toDeal(r: Row): Deal {
   };
 }
 
-const active = `(d.ends_on IS NULL OR d.ends_on >= ?)`;
+// running (not ended) and not deleted; takes today's date as its parameter
+const active = `(d.ends_on IS NULL OR d.ends_on >= ?) AND d.deleted_at IS NULL`;
 
 // Deals that ended before `sinceEndsOn` (a YYYY-MM-DD date) drop out of the
 // feed; they stay in the database.
@@ -288,8 +295,9 @@ export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
   return rows.map((r) => toDeal(r as Row));
 }
 
+// A deleted deal reads as missing, so nothing can be done to it either.
 export function getDeal(id: number): Deal | null {
-  const row = db.prepare(`${selectDeals} WHERE d.id = ?`).get(id);
+  const row = db.prepare(`${selectDeals} WHERE d.id = ? AND d.deleted_at IS NULL`).get(id);
   return row ? toDeal(row as Row) : null;
 }
 
@@ -342,6 +350,10 @@ export function createDeal(d: NewDeal): Deal {
     return Number(lastInsertRowid);
   });
   return getDeal(id)!;
+}
+
+export function deleteDeal(id: number): void {
+  db.prepare(`UPDATE deals SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now(), id);
 }
 
 export function reportStock(dealId: number, stock: Stock, author: Author): void {

@@ -227,6 +227,8 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
   $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · posted by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
 
+  if (isMe(d.author)) wireDelete(d, li);
+
   const group = $(".stock", li);
   group.setAttribute("aria-label", `How much ${d.item} is left`);
   for (const b of group.querySelectorAll("button")) {
@@ -277,6 +279,47 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".comment-form", li).addEventListener("submit", (e) => postComment(e, d.id, li));
   if (commentsOpen) details.open = true;
   return li;
+}
+
+// Deleting asks first, on the card itself, and says what else goes with it.
+function wireDelete(d, li) {
+  const box = $(".delete", li);
+  const start = $(".delete-start", box);
+  const ask = $(".delete-confirm", box);
+  box.hidden = false;
+
+  const plural = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const others = [
+    d.confirmations && plural(d.confirmations, "confirmation", "confirmations"),
+    d.comments && plural(d.comments, "comment", "comments"),
+    d.pending.length && plural(d.pending.length, "open correction", "open corrections"),
+  ].filter(Boolean);
+  $(".delete-warning", box).textContent =
+    "Delete this post? It disappears for everyone." +
+    (others.length
+      ? ` It has ${others.length > 1 ? `${others.slice(0, -1).join(", ")} and ${others.at(-1)}` : others[0]} from other people, which will be hidden too.`
+      : "");
+
+  start.addEventListener("click", () => {
+    start.hidden = true;
+    ask.hidden = false;
+    $(".delete-no", box).focus();
+  });
+  $(".delete-no", box).addEventListener("click", () => {
+    ask.hidden = true;
+    start.hidden = false;
+    start.focus();
+  });
+  $(".delete-yes", box).addEventListener("click", async () => {
+    try {
+      await api(`/api/deals/${d.id}/delete`, { author: author() });
+      deals = deals.filter((x) => x.id !== d.id);
+      renderFeed();
+      $("#feed-status").textContent = `Deleted “${d.item}”.`;
+    } catch (err) {
+      alertIn(box, err.message);
+    }
+  });
 }
 
 function pendingItem(d, p) {
