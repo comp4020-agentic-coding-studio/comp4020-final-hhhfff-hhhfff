@@ -1,0 +1,354 @@
+:root {
+  --ink: #1d1b16;
+  --muted: #615c50;
+  --paper: #faf7f0;
+  --card: #fff;
+  --line: #e2dccd;
+  --accent: #c8102e;
+  --accent-ink: #fff;
+  --good: #1f7a3d;
+  --focus: #1a5fd0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.wrap {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.masthead {
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 1rem 0 0.75rem;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.tagline {
+  margin: 0.25rem 0 0;
+}
+
+.tagline a {
+  color: inherit;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 0 0 0.75rem;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+input[aria-invalid="true"] {
+  border-color: var(--accent);
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  background: var(--ink);
+  color: #fff;
+}
+
+button.quiet {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+button.small {
+  padding: 0.2rem 0.5rem;
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.me,
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.me input {
+  width: auto;
+  flex: 1 1 10rem;
+}
+
+.filters select {
+  width: auto;
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.filters .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.tag {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.optional {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.error {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.error:empty {
+  display: none;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.post .grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.post label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.post .wide {
+  grid-column: 1 / -1;
+}
+
+.post label .small {
+  align-self: flex-start;
+}
+
+.money {
+  position: relative;
+  display: block;
+}
+
+.money::before {
+  content: "$";
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.money input {
+  padding-left: 1.3rem;
+}
+
+.feed {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 3rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.deal-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0 1rem;
+}
+
+.deal h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.deal .store {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prices {
+  margin: 0.4rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.prices .now {
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+.prices .was {
+  color: var(--muted);
+}
+
+.prices .off {
+  display: inline-block;
+  background: #fff2c2;
+  border-radius: 4px;
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.meta {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.stock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.stock-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.stock button {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+.stock button[aria-pressed="true"] {
+  background: var(--good);
+  border-color: var(--good);
+  color: #fff;
+}
+
+.stock button[data-stock="gone"][aria-pressed="true"] {
+  background: var(--muted);
+  border-color: var(--muted);
+}
+
+.stock-by {
+  margin: 0.3rem 0 0.5rem;
+}
+
+.sold-out .prices,
+.sold-out h3 {
+  opacity: 0.55;
+}
+
+.comments summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.comment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.comment-list li {
+  border-left: 3px solid var(--line);
+  padding: 0.1rem 0 0.1rem 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.comment-list .who {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.comment-list p {
+  margin: 0;
+}
+
+.comment-form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* the /readme/ page */
+.readme nav,
+.readme main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.readme main img {
+  max-width: 100%;
+}
+
+@media (max-width: 30rem) {
+  .post .grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>discountShow</title>
+    <meta name="description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="wrap">
+        <h1>discountShow</h1>
+        <p class="tagline">Cheap food, spotted by students, for students. <a href="/readme/">About</a></p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="me" aria-label="Your nickname">
+        <label for="nickname">Posting as</label>
+        <input id="nickname" name="nickname" maxlength="24" autocomplete="nickname" placeholder="pick a nickname" />
+        <span class="tag" id="me-tag"></span>
+      </section>
+
+      <section class="filters" aria-label="Which stores">
+        <label for="store-filter">Showing</label>
+        <select id="store-filter"></select>
+        <button type="button" id="locate" class="quiet">Sort stores by my location</button>
+        <p class="hint" id="locate-status" aria-live="polite">Stores are sorted by distance from ANU.</p>
+      </section>
+
+      <form id="post" class="card post" novalidate>
+        <h2>What did you spot?</h2>
+        <div class="grid">
+          <label class="wide">Store <select name="storeId" required></select></label>
+          <label class="wide">Item <input name="item" maxlength="80" required placeholder="e.g. Tim Tams 200g" /></label>
+          <label>Usual price <span class="money"><input name="was" inputmode="decimal" required placeholder="5.50" /></span></label>
+          <label>Special price <span class="money"><input name="now" inputmode="decimal" required placeholder="2.75" /></span></label>
+          <label>
+            Ends <span class="optional">(optional)</span>
+            <input name="endsOn" type="date" />
+            <button type="button" class="quiet small" id="next-tuesday">this Tuesday</button>
+          </label>
+          <label>
+            How much is left
+            <select name="stock" required>
+              <option value="plenty">Plenty</option>
+              <option value="some">Some</option>
+              <option value="few">Only a few</option>
+              <option value="gone">Sold out</option>
+            </select>
+          </label>
+          <label class="wide">
+            Where did you see it
+            <select name="source" required>
+              <option value="in-store">In the store, with my own eyes</option>
+              <option value="store-website">The store's website or app</option>
+              <option value="catalogue">The catalogue</option>
+              <option value="word-of-mouth">Someone told me</option>
+            </select>
+          </label>
+        </div>
+        <p class="error" role="alert" id="post-error"></p>
+        <button type="submit">Post it</button>
+      </form>
+
+      <section aria-labelledby="feed-heading">
+        <h2 id="feed-heading" class="visually-hidden">Specials</h2>
+        <p class="hint" id="feed-status" aria-live="polite"></p>
+        <ol id="feed" class="feed"></ol>
+      </section>
+    </main>
+
+    <template id="deal-template">
+      <li class="card deal">
+        <div class="deal-head">
+          <h3 class="item"></h3>
+          <p class="store"></p>
+        </div>
+        <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
+        <p class="meta"></p>
+        <div class="stock" role="group">
+          <span class="stock-label">Left:</span>
+          <button type="button" data-stock="plenty">Plenty</button>
+          <button type="button" data-stock="some">Some</button>
+          <button type="button" data-stock="few">A few</button>
+          <button type="button" data-stock="gone">Sold out</button>
+        </div>
+        <p class="stock-by hint"></p>
+        <details class="comments">
+          <summary></summary>
+          <ol class="comment-list"></ol>
+          <form class="comment-form">
+            <input name="body" maxlength="500" required aria-label="Comment" placeholder="Still there? Worth it? Add a comment" />
+            <button type="submit">Reply</button>
+          </form>
+        </details>
+      </li>
+    </template>
+  </body>
+</html>
