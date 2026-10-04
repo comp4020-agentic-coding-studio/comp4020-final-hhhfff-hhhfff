@@ -288,7 +288,7 @@ post.addEventListener("submit", async (e) => {
   const nowCents = toCents(f.now.value);
   const problem =
     !f.storeId.value ? "Which store was it?"
-    : f.item.value.trim().length < 2 ? "What's the item?"
+    : f.product.value.trim().length < 2 ? "What's the item?"
     : Number.isNaN(wasCents) ? "The usual price should look like 5.50."
     : Number.isNaN(nowCents) ? "The special price should look like 2.75."
     : nowCents >= wasCents ? "The special price has to be lower than the usual price."
@@ -300,7 +300,7 @@ post.addEventListener("submit", async (e) => {
   try {
     const deal = await api("/api/deals", {
       storeId: f.storeId.value,
-      item: f.item.value,
+      item: f.product.value,
       wasCents,
       nowCents,
       endsOn: f.endsOn.value || null,
@@ -308,7 +308,7 @@ post.addEventListener("submit", async (e) => {
       source: f.source.value,
       author: me,
     });
-    for (const name of ["item", "was", "now", "endsOn"]) f[name].value = "";
+    for (const name of ["product", "was", "now", "endsOn"]) f[name].value = "";
     const filter = $("#store-filter").value;
     if (!filter || filter === deal.storeId) deals = [deal, ...deals];
     renderFeed();
