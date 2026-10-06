@@ -50,8 +50,8 @@ Only the poster, or an admin, can delete a post.
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 the confirmation and three-person correction rules, poster-only delete, the
 price check, the one-minute stock-report limit, guests being read-only,
-logins working across browsers, and no password or session token ever
-leaking.
+logins working across browsers, no password or session token ever
+leaking, and live updates reaching an open page (carrying ids only).
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
@@ -79,5 +79,12 @@ word-of-mouth), so readers can weigh it.
 I chose not to build email or social login, password reset, receipt
 photos, price-history charts or website scraping: each adds friction or a
 claim the app cannot check (so a forgotten password means a new account),
-and the shops that matter most have no website. Live push to other open
-browsers is not built yet; a page shows what was true when it loaded.
+and the shops that matter most have no website.
+
+An open page updates itself: a new post, a stock report, a confirmation, a
+comment or a delete from anyone shows within a moment, because "gone" is
+only useful if it arrives before the walk. It is a one-way stream of "this
+deal changed" (ids only; the page fetches what it may see), so guests get
+it too, and a card you are typing in is left alone until you finish. If the
+connection drops the page catches up when it reconnects. It is not built
+for crowds: at most 300 pages can listen at once.

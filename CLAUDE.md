@@ -39,6 +39,9 @@ README, stop and say so rather than picking one.
 - Count a poster's own vote, or one person's repeat votes, towards the
   three-person correction quorum. One person is one account.
 - Let one account report a post's stock more than once a minute.
+- Put anything but ids on the live stream (`/api/events`): the page fetches
+  the deal itself, so what it sees is decided by the normal read routes.
+  Cap its listeners; the machine has 256 MB.
 - Lose data on restart or redeploy.
 
 ## What the pages must hold to

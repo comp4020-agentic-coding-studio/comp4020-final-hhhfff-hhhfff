@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { marked } from "marked";
+import { broadcast, listen, tell } from "./events.ts";
 import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
 import {
   accountByName,
@@ -258,6 +259,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   if (method === "GET" && path === "/api/stores") return send(res, 200, STORES);
 
+  // live updates: who is listening only decides who also gets their own notices
+  if (method === "GET" && path === "/api/events") {
+    if (!listen(req, res, whoIs(req)?.id ?? null)) throw new HttpError(503, "too many people are watching live, try again soon");
+    return;
+  }
+
   // --- accounts
   if (method === "GET" && path === "/api/me") return send(res, 200, whoIs(req));
 
@@ -331,6 +338,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       source: oneOf<Source>(b.source, SOURCES, "source"),
       author: who,
     });
+    broadcast({ type: "deal", id: deal.id });
     return send(res, 201, deal);
   }
 
@@ -350,6 +358,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       throw new HttpError(403, "only the person who posted this can delete it");
     }
     deleteDeal(id);
+    broadcast({ type: "deleted", id });
     return send(res, 200, { deleted: id });
   }
 
@@ -358,6 +367,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id = dealId(m[1]);
     if (getDeal(id)!.author.id === who.id) throw new HttpError(400, "that's your own post");
     const added = confirmDeal(id, who);
+    if (added) broadcast({ type: "deal", id });
     return send(res, added ? 201 : 200, getDeal(id));
   }
 
@@ -375,6 +385,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       throw new HttpError(400, "the special price has to stay lower than the usual price");
     }
     const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents);
+    broadcast({ type: "deal", id });
+    if (deal.author.id !== who.id) tell(deal.author.id, { type: "notice" });
     return send(res, result.applied ? 200 : 201, { ...result, deal: getDeal(id) });
   }
 
@@ -395,6 +407,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const wait = stockWait(id, by);
     if (wait) throw new HttpError(429, `You just reported this. Try again in ${wait}s.`, { retryAfter: wait });
     reportStock(id, stock, by);
+    broadcast({ type: "deal", id });
     return send(res, 200, getDeal(id));
   }
 
@@ -404,7 +417,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (method === "POST") {
       const by = asAuthor(need(req, "comment", "comment"));
       const b = await readJson(req);
-      return send(res, 201, addComment(id, str(b.body, "comment", 1, 500), by));
+      const comment = addComment(id, str(b.body, "comment", 1, 500), by);
+      broadcast({ type: "deal", id });
+      return send(res, 201, comment);
     }
   }
 

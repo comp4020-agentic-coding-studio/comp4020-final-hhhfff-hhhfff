@@ -466,6 +466,7 @@ async function enter(path) {
     me = await api(path, { username: authForm.elements.username.value, password: authForm.elements.password.value });
     authForm.reset();
     showMe();
+    connectLive(); // so this connection gets my own notices
     await loadFeed();
     loadNotices();
   } catch (err) {
@@ -490,6 +491,7 @@ $("#logout").addEventListener("click", async () => {
   $("#notices").hidden = true;
   closePost();
   showMe();
+  connectLive();
   await loadFeed();
 });
 
@@ -758,6 +760,77 @@ function jumpTo(id) {
   setTimeout(() => card.classList.remove("flash"), 1600);
 }
 
+// --- live: the server only says which deal changed; fetch it and swap that card
+
+let live = null;
+
+function connectLive() {
+  live?.close();
+  if (!window.EventSource) return; // the tab-focus refresh below still works
+  const source = (live = new EventSource("/api/events"));
+  let opened = false;
+  source.addEventListener("open", () => {
+    // a reconnect may have missed events, so catch up
+    if (opened) {
+      loadFeed();
+      loadNotices();
+    }
+    opened = true;
+  });
+  source.addEventListener("message", (e) => {
+    try {
+      onLive(JSON.parse(e.data));
+    } catch {
+      // not an event we know: ignore it
+    }
+  });
+}
+
+function onLive(ev) {
+  if (ev.type === "notice") loadNotices();
+  else if (ev.type === "deleted") removeCard(ev.id);
+  else if (ev.type === "deal") refreshDeal(ev.id);
+}
+
+function removeCard(id) {
+  deals = deals.filter((x) => x.id !== id);
+  document.getElementById(`deal-${id}`)?.remove();
+  if (!deals.length) renderFeed();
+}
+
+// Someone is mid-way through something on this card: don't pull it out from under them.
+const busy = (card) =>
+  card.contains(document.activeElement) ||
+  !!card.querySelector(".delete-confirm:not([hidden])") ||
+  [...card.querySelectorAll("details[open] input, details[open] textarea")].some((i) => i.value);
+
+async function refreshDeal(id) {
+  let d;
+  try {
+    d = await api(`/api/deals/${id}`);
+  } catch (err) {
+    if (err.status === 404) removeCard(id);
+    return;
+  }
+  const filter = $("#store-filter").value;
+  if (filter && filter !== d.storeId) return;
+  const known = deals.some((x) => x.id === id);
+  deals = known ? deals.map((x) => (x.id === id ? d : x)) : [d, ...deals];
+  const card = document.getElementById(`deal-${id}`);
+  if (card && busy(card)) return; // the data is kept; the card catches up on the next render
+  const fresh = dealCard(
+    d,
+    storeById().get(d.storeId),
+    !!card?.querySelector("details.comments")?.open,
+    !!card?.querySelector("details.correct")?.open,
+  );
+  if (card) card.replaceWith(fresh);
+  else {
+    $("#feed").prepend(fresh);
+    $("#feed-status").textContent = "";
+  }
+}
+
 // --- start
 
 $("#store-filter").addEventListener("change", loadFeed);
@@ -774,3 +847,4 @@ stores = await api("/api/stores");
 renderStoreOptions();
 await loadFeed();
 loadNotices();
+connectLive();
