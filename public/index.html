@@ -19,10 +19,21 @@
     <main class="wrap">
       <section id="notices" class="notices" aria-live="polite" aria-label="News about your posts" hidden></section>
 
-      <section class="me" aria-label="Your nickname">
-        <label for="nickname">Posting as</label>
-        <input id="nickname" name="nickname" maxlength="24" autocomplete="nickname" placeholder="pick a nickname" />
-        <span class="tag" id="me-tag"></span>
+      <section class="me" id="account" aria-label="Your account">
+        <p id="who" class="who"></p>
+        <button type="button" id="show-login" class="small">Log in or register</button>
+        <button type="button" id="logout" class="quiet small" hidden>Log out</button>
+        <form id="auth" class="auth" novalidate hidden>
+          <label>Username <input name="username" maxlength="24" autocomplete="username" required /></label>
+          <label>Password <input name="password" type="password" maxlength="128" autocomplete="current-password" required /></label>
+          <div class="actions">
+            <button type="submit">Log in</button>
+            <button type="button" id="register-btn" class="quiet">Create account</button>
+            <button type="button" id="auth-cancel" class="quiet small">Cancel</button>
+          </div>
+          <p class="hint">3–24 letters, digits, - or _. Password at least 8 characters.</p>
+          <p class="error" role="alert" id="auth-error"></p>
+        </form>
       </section>
 
       <section class="filters" aria-label="Which stores">

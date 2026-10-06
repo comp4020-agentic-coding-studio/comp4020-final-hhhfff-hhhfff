@@ -1,14 +1,17 @@
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { marked } from "marked";
+import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
 import {
+  accountByName,
   addComment,
   confirmDeal,
   CORRECTABLE,
   createDeal,
+  createUser,
   deleteDeal,
+  endSession,
   fieldValue,
   getDeal,
   listComments,
@@ -16,11 +19,14 @@ import {
   ownDuplicate,
   proposeCorrection,
   reportStock,
-  stockWait,
+  setAdmins,
   similarDeals,
   SOURCES,
+  startSession,
   STOCK_LEVELS,
+  stockWait,
   takeNotifications,
+  userForToken,
   type Author,
   type Field,
   type Source,
@@ -72,19 +78,68 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
   return v as T;
 }
 
-// A browser holds a secret key and sends it with every write; the server only
-// ever stores and shows a hash of it. The public id appears in every API
-// response, so it can't be what proves who you are: knowing it lets nobody
-// post, confirm or correct as you.
-const publicId = (key: string): string => createHash("sha256").update(key).digest("hex").slice(0, 16);
+// --- accounts. Who you are comes only from the session cookie, never from the
+// request body, and what you may do from your role (server/auth.ts). A public
+// id, which every response shows, can't stand in for a session.
 
-function author(v: unknown): Author {
-  const a = (v ?? {}) as Record<string, unknown>;
-  if (typeof a.key !== "string" || !/^[A-Za-z0-9-]{16,64}$/.test(a.key)) {
-    throw new HttpError(400, "author key is missing or malformed");
+const USERNAME = /^[A-Za-z0-9_-]{3,24}$/;
+const COOKIE = "sid";
+
+// Admins are named in ADMIN_USERS (comma separated) and promoted at startup.
+setAdmins((process.env.ADMIN_USERS ?? "").split(",").map((u) => u.trim()).filter(Boolean));
+
+function tokenOf(req: IncomingMessage): string | null {
+  for (const part of (req.headers.cookie ?? "").split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === COOKIE) return v.join("=") || null;
   }
-  return { id: publicId(a.key), name: str(a.name, "nickname", 1, 24) };
+  return null;
 }
+
+const whoIs = (req: IncomingMessage): User | null => {
+  const token = tokenOf(req);
+  return token ? userForToken(token) : null;
+};
+
+// A guest gets 401 (log in), a signed-in user without the role gets 403.
+function need(req: IncomingMessage, action: Action, what: string): User {
+  const user = whoIs(req);
+  if (!user) throw new HttpError(401, `log in to ${what}`);
+  if (!can(user.role, action)) throw new HttpError(403, `your account can't ${what}`);
+  return user;
+}
+
+const asAuthor = (u: User): Author => ({ id: u.id, name: u.name });
+
+function password(v: unknown): string {
+  if (typeof v !== "string" || v.length < 8 || v.length > 128) {
+    throw new HttpError(400, "password must be 8–128 characters");
+  }
+  return v;
+}
+
+function setCookie(req: IncomingMessage, token: string, maxAge: number): string {
+  const secure = req.headers["x-forwarded-proto"] === "https" ? "; Secure" : "";
+  return `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}${secure}`;
+}
+
+// Too many wrong passwords for one username in a minute pauses logins for it.
+const failures = new Map<string, { count: number; since: number }>();
+const MAX_FAILURES = 5;
+const FAILURE_WINDOW_MS = 60_000;
+function loginBlocked(username: string): boolean {
+  const f = failures.get(username.toLowerCase());
+  return !!f && Date.now() - f.since < FAILURE_WINDOW_MS && f.count >= MAX_FAILURES;
+}
+function noteFailure(username: string): void {
+  if (failures.size > 5000) failures.clear();
+  const key = username.toLowerCase();
+  const f = failures.get(key);
+  failures.set(key, f && Date.now() - f.since < FAILURE_WINDOW_MS ? { ...f, count: f.count + 1 } : { count: 1, since: Date.now() });
+}
+
+// a password check that costs the same whether or not the username exists
+const NO_SUCH_USER = await hashPassword("no such user");
 
 // A correction's new value, checked the same way as when the deal was posted.
 function fieldInput(field: Field, v: unknown): Value {
@@ -137,8 +192,8 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
   throw new HttpError(400, "body must be a JSON object");
 }
 
-function send(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+function send(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers });
   res.end(JSON.stringify(body));
 }
 
@@ -203,6 +258,46 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   if (method === "GET" && path === "/api/stores") return send(res, 200, STORES);
 
+  // --- accounts
+  if (method === "GET" && path === "/api/me") return send(res, 200, whoIs(req));
+
+  if (method === "POST" && (path === "/api/register" || path === "/api/login")) {
+    const b = await readJson(req);
+    const username = typeof b.username === "string" ? b.username.trim() : "";
+    if (!USERNAME.test(username)) throw new HttpError(400, "username must be 3–24 letters, digits, - or _");
+    const pw = password(b.password);
+    let user: User | null;
+    if (path === "/api/register") {
+      const { salt, hash } = await hashPassword(pw);
+      user = createUser(username, salt, hash, "user");
+      if (!user) throw new HttpError(409, "that username is taken");
+      if (process.env.ADMIN_USERS) setAdmins(process.env.ADMIN_USERS.split(",").map((u) => u.trim()).filter(Boolean));
+      user = accountByName(username);
+    } else {
+      if (loginBlocked(username)) throw new HttpError(429, "too many wrong passwords, wait a minute");
+      const account = accountByName(username);
+      const ok = await verifyPassword(pw, (account ?? NO_SUCH_USER).salt, (account ?? NO_SUCH_USER).hash);
+      if (!account || !ok) {
+        noteFailure(username);
+        throw new HttpError(401, "wrong username or password");
+      }
+      failures.delete(username.toLowerCase());
+      user = account;
+    }
+    const token = newToken();
+    const me: User = { id: user!.id, name: user!.name, role: user!.role };
+    startSession(me, token, SESSION_DAYS);
+    return send(res, path === "/api/register" ? 201 : 200, me, {
+      "set-cookie": setCookie(req, token, SESSION_DAYS * 86_400),
+    });
+  }
+
+  if (method === "POST" && path === "/api/logout") {
+    const token = tokenOf(req);
+    if (token) endSession(token);
+    return send(res, 200, { ok: true }, { "set-cookie": setCookie(req, "", 0) });
+  }
+
   if (method === "GET" && path === "/api/deals") {
     const store = url.searchParams.get("store");
     if (store && !storeById.has(store)) throw new HttpError(404, "no such store");
@@ -210,6 +305,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (method === "POST" && path === "/api/deals") {
+    const who = asAuthor(need(req, "post", "post a special"));
     const b = await readJson(req);
     const storeId = typeof b.storeId === "string" && storeById.has(b.storeId) ? b.storeId : null;
     if (!storeId) throw new HttpError(400, "pick a store");
@@ -217,7 +313,6 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const nowCents = cents(b.nowCents, "special price");
     if (nowCents >= wasCents) throw new HttpError(400, "the special price has to be lower than the usual price");
     const item = str(b.item, "item", 2, 80);
-    const who = author(b.author);
     // one post per person per item per store while it's running: a change
     // to your own special is a correction, not a second post
     const existing = ownDuplicate(who.id, storeId, item, todayInCanberra());
@@ -247,30 +342,32 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return send(res, 200, similarDeals(store, item, todayInCanberra()));
   }
 
-  // only the poster can take a post down, whoever else has added to it
+  // only the poster (or an admin) can take a post down, whoever else has added to it
   if ((m = path.match(/^\/api\/deals\/(\d+)\/delete$/)) && method === "POST") {
+    const user = need(req, "delete-own", "delete a post");
     const id = dealId(m[1]);
-    const who = author((await readJson(req)).author);
-    if (getDeal(id)!.author.id !== who.id) throw new HttpError(403, "only the person who posted this can delete it");
+    if (getDeal(id)!.author.id !== user.id && !can(user.role, "delete-any")) {
+      throw new HttpError(403, "only the person who posted this can delete it");
+    }
     deleteDeal(id);
     return send(res, 200, { deleted: id });
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/confirm$/)) && method === "POST") {
+    const who = asAuthor(need(req, "confirm", "confirm a post"));
     const id = dealId(m[1]);
-    const who = author((await readJson(req)).author);
     if (getDeal(id)!.author.id === who.id) throw new HttpError(400, "that's your own post");
     const added = confirmDeal(id, who);
     return send(res, added ? 201 : 200, getDeal(id));
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/corrections$/)) && method === "POST") {
+    const who = asAuthor(need(req, "correct", "correct a post"));
     const id = dealId(m[1]);
     const b = await readJson(req);
     const field = oneOf<Field>(b.field, CORRECTABLE, "field");
     const value = fieldInput(field, b.value);
     const note = b.note === undefined || b.note === null || b.note === "" ? null : str(b.note, "note", 1, 280);
-    const who = author(b.author);
     const deal = getDeal(id)!;
     if (sameValue(field, fieldValue(deal, field), value)) throw new HttpError(400, "that's what the post already says");
     const after = { ...deal, [field]: value };
@@ -283,7 +380,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // a poster's unseen notifications, handed over once
   if (method === "POST" && path === "/api/notifications") {
-    return send(res, 200, takeNotifications(author((await readJson(req)).author).id));
+    return send(res, 200, takeNotifications(need(req, "notifications", "see notifications").id));
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)$/)) && method === "GET") {
@@ -291,10 +388,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/stock$/)) && method === "POST") {
+    const by = asAuthor(need(req, "stock", "report stock"));
     const id = dealId(m[1]);
     const b = await readJson(req);
     const stock = oneOf<Stock>(b.stock, STOCK_LEVELS, "stock");
-    const by = author(b.author);
     const wait = stockWait(id, by);
     if (wait) throw new HttpError(429, `You just reported this. Try again in ${wait}s.`, { retryAfter: wait });
     reportStock(id, stock, by);
@@ -305,8 +402,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id = dealId(m[1]);
     if (method === "GET") return send(res, 200, listComments(id));
     if (method === "POST") {
+      const by = asAuthor(need(req, "comment", "comment"));
       const b = await readJson(req);
-      return send(res, 201, addComment(id, str(b.body, "comment", 1, 500), author(b.author)));
+      return send(res, 201, addComment(id, str(b.body, "comment", 1, 500), by));
     }
   }
 

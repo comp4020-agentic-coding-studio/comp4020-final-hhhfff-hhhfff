@@ -20,26 +20,38 @@ posts, is what the design serves:
 
 1. **One post per item per store.** A repeat is refused and points at the
    existing post, so the feed never shows conflicting prices.
-2. **The crowd corrects posts, not just the poster.** Anyone can say "same
+2. **The crowd corrects posts, not just the poster.** Any user can say "same
    and correct". If the price, item or end date is wrong, three different
    people proposing the same fix rewrites the post and the poster is told.
    Two people, or three with different fixes, change nothing. The poster's
    own correction applies at once.
-3. **Stock is a first-class fact.** Anyone can report plenty, some, few or
-   gone, with name and time, because "gone" is how a markdown usually ends. One person can report a given post once a minute, and the last few reports stay visible, so a flip-flop shows rather than silently winning.
+3. **Stock is a first-class fact.** Any user can report plenty, some, few or
+   gone, with name and time, because "gone" is how a markdown usually ends.
+   One person can report a given post once a minute, and the last few
+   reports stay visible, so a flip-flop shows rather than silently winning.
 4. **Specials are cheaper, or they are not specials.** A post not below the
    usual price never reaches the feed, and no correction can change that.
 
-Nobody has an account; low friction matters in an aisle. You pick a
-nickname and the browser holds a secret key that proves later actions are
-yours. The server never sends it back. Only the poster can delete their
-post.
+Everyone can read; to post, confirm, correct, report stock or comment you
+log in. I first left accounts out, because low friction matters in an aisle,
+and a nickname with a browser-held key was enough. But the rules above all
+count *people*, and a new browser was a new person: three "different"
+people could be one, and a one-a-minute limit could be dodged by clearing
+storage. So an account is a username and password, and the same login in
+another browser is the same person. The cost is one sign-up before a first
+post; reading stays free. Roles are guest (read only), user (the above,
+and delete their own post) and admin (also delete any post, named in the
+server's `ADMIN_USERS`). Passwords are stored only as salted hashes and
+the session is an HttpOnly cookie; the server never sends either back.
+Only the poster, or an admin, can delete a post.
 
 ## What is enforced and what is judged
 
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 the confirmation and three-person correction rules, poster-only delete, the
-price check, the one-minute stock-report limit, and the secret key never leaking.
+price check, the one-minute stock-report limit, guests being read-only,
+logins working across browsers, and no password or session token ever
+leaking.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
@@ -64,7 +76,8 @@ The shop list comes from OpenStreetMap, petrol stations dropped. Each post
 records where the poster saw it (in-store, store website, catalogue or
 word-of-mouth), so readers can weigh it.
 
-I chose not to build accounts, receipt photos, price-history charts or
-website scraping: each adds a login barrier or a claim the app cannot
-check, and the shops that matter most have no website. Live push to other
-open browsers is not built yet; a page shows what was true when it loaded.
+I chose not to build email or social login, password reset, receipt
+photos, price-history charts or website scraping: each adds friction or a
+claim the app cannot check (so a forgotten password means a new account),
+and the shops that matter most have no website. Live push to other open
+browsers is not built yet; a page shows what was true when it loaded.

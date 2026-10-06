@@ -1,54 +1,23 @@
 // discountShow: the whole client. No framework, no build step.
 //
-// Identity is a secret key plus a nickname, kept in this browser's
-// localStorage and sent with every write. The server shows only a hash of the
-// key (the public id), so nobody can act as you by copying what they see.
+// Identity is an account: log in with a username and password and the server
+// keeps you signed in with an HttpOnly cookie this script never sees. A guest
+// can only look; the buttons that write ask them to log in. The server is what
+// enforces that, not this file.
 // A location, if the visitor shares one, is only used here to sort stores;
 // it is never sent to the server.
 
 const ANU = { lat: -35.2777, lon: 149.1185 };
-const ME_KEY = "specials.me";
 const QUORUM = 3; // must match CORRECTION_QUORUM in server/db.ts
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
 // --- who am I
 
-function loadMe() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(ME_KEY) ?? "null");
-    if (saved && typeof saved.key === "string") return saved;
-    // the first version called the key `id`
-    if (saved && typeof saved.id === "string") return { key: saved.id, name: saved.name ?? "" };
-  } catch {
-    // storage blocked or corrupt: start fresh
-  }
-  return { key: crypto.randomUUID(), name: "" };
-}
-
-const me = loadMe();
-const author = () => ({ key: me.key, name: me.name });
-
-function saveMe() {
-  try {
-    localStorage.setItem(ME_KEY, JSON.stringify({ key: me.key, name: me.name }));
-  } catch {
-    // private window: the identity lasts as long as the tab
-  }
-}
-
-// the same hash the server makes of the key (server/server.ts publicId)
-async function publicIdOf(key) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
-}
-let myId = "";
-const isMe = (a) => a.id === myId;
-
-// Two people can pick the same nickname, so every name is shown with the
-// last four characters of its public id.
-const tagOf = (a) => `#${a.id.slice(-4)}`;
-const nameOf = (a) => (isMe(a) ? "you" : `${a.name} ${tagOf(a)}`);
+let me = null; // { id, name, role } once logged in, null for a guest
+const isMe = (a) => !!me && a.id === me.id;
+const isAdmin = () => me?.role === "admin";
+const nameOf = (a) => (isMe(a) ? "you" : a.name);
 
 // --- formatting
 
@@ -157,9 +126,9 @@ $("#locate").addEventListener("click", () => {
 // --- notifications: what happened to my posts while I was away
 
 async function loadNotices() {
-  if (!myId) return;
+  if (!me) return;
   try {
-    const notes = await api("/api/notifications", { author: author() });
+    const notes = await api("/api/notifications", {});
     if (!notes.length) return;
     const box = $("#notices");
     for (const n of notes) {
@@ -227,7 +196,7 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
   $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · posted by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
 
-  if (isMe(d.author)) wireDelete(d, li);
+  if (isMe(d.author) || isAdmin()) wireDelete(d, li);
 
   const group = $(".stock", li);
   group.setAttribute("aria-label", `How much ${d.item} is left`);
@@ -316,7 +285,7 @@ function wireDelete(d, li) {
   });
   $(".delete-yes", box).addEventListener("click", async () => {
     try {
-      await api(`/api/deals/${d.id}/delete`, { author: author() });
+      await api(`/api/deals/${d.id}/delete`, {});
       deals = deals.filter((x) => x.id !== d.id);
       renderFeed();
       $("#feed-status").textContent = `Deleted “${d.item}”.`;
@@ -384,9 +353,9 @@ async function submitCorrection(e, d) {
 }
 
 async function sendCorrection(d, field, value, note, where) {
-  if (!requireName()) return;
+  if (!requireLogin()) return;
   try {
-    const r = await api(`/api/deals/${d.id}/corrections`, { field, value, note, author: author() });
+    const r = await api(`/api/deals/${d.id}/corrections`, { field, value, note });
     replaceDeal(r.deal);
     $("#feed-status").textContent = r.applied
       ? `Corrected: ${FIELD_TEXT[field].toLowerCase()} is now ${valueText(field, value)}.`
@@ -397,18 +366,18 @@ async function sendCorrection(d, field, value, note, where) {
 }
 
 async function confirmDeal(id) {
-  if (!requireName()) return;
+  if (!requireLogin()) return;
   try {
-    replaceDeal(await api(`/api/deals/${id}/confirm`, { author: author() }));
+    replaceDeal(await api(`/api/deals/${id}/confirm`, {}));
   } catch (err) {
     $("#feed-status").textContent = err.message;
   }
 }
 
 async function updateStock(d, stock) {
-  if (!requireName()) return;
+  if (!requireLogin()) return;
   try {
-    replaceDeal(await api(`/api/deals/${d.id}/stock`, { stock, author: author() }));
+    replaceDeal(await api(`/api/deals/${d.id}/stock`, { stock }));
   } catch (err) {
     $("#feed-status").textContent = err.message;
   }
@@ -437,11 +406,11 @@ async function loadComments(id, li) {
 
 async function postComment(e, id, li) {
   e.preventDefault();
-  if (!requireName()) return;
+  if (!requireLogin()) return;
   const input = e.target.elements.body;
   if (!input.value.trim()) return input.focus();
   try {
-    await api(`/api/deals/${id}/comments`, { body: input.value, author: author() });
+    await api(`/api/deals/${id}/comments`, { body: input.value });
     input.value = "";
     const d = deals.find((x) => x.id === id);
     if (d) d.comments += 1;
@@ -463,28 +432,66 @@ function alertIn(container, message) {
   p.textContent = message;
 }
 
-// --- nickname
+// --- account
 
-const nickname = $("#nickname");
+const authForm = $("#auth");
 
 function showMe() {
-  nickname.value = me.name;
-  $("#me-tag").textContent = me.name && myId ? `#${myId.slice(-4)}` : "";
+  $("#who").textContent = me
+    ? `Signed in as ${me.name}${isAdmin() ? " (admin)" : ""}.`
+    : "You're a guest: you can look, but to post or help correct you need to log in.";
+  $("#show-login").hidden = !!me;
+  $("#logout").hidden = !me;
+  if (me) authForm.hidden = true;
 }
 
-nickname.addEventListener("change", () => {
-  me.name = nickname.value.trim().slice(0, 24);
-  saveMe();
-  showMe();
-});
+function showAuth(message = "") {
+  authForm.hidden = false;
+  $("#auth-error").textContent = message;
+  authForm.elements.username.focus();
+  authForm.scrollIntoView({ block: "center" });
+}
 
-function requireName() {
-  if (me.name) return true;
-  nickname.focus();
-  nickname.setAttribute("aria-invalid", "true");
-  $("#feed-status").textContent = "Pick a nickname first, so others know who's reporting.";
+// Writes need an account: say so, and open the login form.
+function requireLogin(what = "do that") {
+  if (me) return true;
+  showAuth(`Log in or create an account to ${what}.`);
   return false;
 }
+
+async function enter(path) {
+  const error = $("#auth-error");
+  error.textContent = "";
+  try {
+    me = await api(path, { username: authForm.elements.username.value, password: authForm.elements.password.value });
+    authForm.reset();
+    showMe();
+    await loadFeed();
+    loadNotices();
+  } catch (err) {
+    error.textContent = err.message;
+  }
+}
+
+authForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  enter("/api/login");
+});
+$("#register-btn").addEventListener("click", () => enter("/api/register"));
+$("#auth-cancel").addEventListener("click", () => {
+  authForm.hidden = true;
+  $("#show-login").focus();
+});
+$("#show-login").addEventListener("click", () => showAuth());
+$("#logout").addEventListener("click", async () => {
+  await api("/api/logout", {}).catch(() => {});
+  me = null;
+  $("#notices").replaceChildren();
+  $("#notices").hidden = true;
+  closePost();
+  showMe();
+  await loadFeed();
+});
 
 // --- posting a special: check for one already in the feed first
 
@@ -527,8 +534,8 @@ post.addEventListener("submit", async (e) => {
   e.preventDefault();
   const error = $("#post-error");
   error.textContent = "";
-  if (!requireName()) {
-    error.textContent = "Pick a nickname first (top of the page).";
+  if (!requireLogin("post a special")) {
+    error.textContent = "Log in first (top of the page).";
     return;
   }
   try {
@@ -563,7 +570,7 @@ function closePost({ refocus = false } = {}) {
   if (refocus) toggle.focus();
 }
 
-toggle.addEventListener("click", openPost);
+toggle.addEventListener("click", () => requireLogin("post a special") && openPost());
 $("#post-close").addEventListener("click", () => closePost({ refocus: true }));
 for (const panel of [post, similar]) {
   panel.addEventListener("keydown", (e) => e.key === "Escape" && closePost({ refocus: true }));
@@ -665,7 +672,7 @@ function similarItem(m) {
 
 async function confirmFromDraft(m, li) {
   try {
-    replaceOrAdd(await api(`/api/deals/${m.id}/confirm`, { author: author() }));
+    replaceOrAdd(await api(`/api/deals/${m.id}/confirm`, {}));
     clearPost();
     closeSimilar(`Thanks: you confirmed “${m.item}” instead of posting it twice.`);
     jumpTo(m.id);
@@ -685,7 +692,6 @@ async function applyDifferences(m, fields, li) {
         field,
         value: draft[field],
         note: null,
-        author: author(),
       });
       latest = r.deal;
       lines.push(`${FIELD_TEXT[field].toLowerCase()} ${r.applied ? "corrected" : `suggested (${r.votes} of ${r.needed} agree)`}`);
@@ -715,7 +721,7 @@ $("#similar-cancel").addEventListener("click", () => {
 
 async function publish() {
   try {
-    const deal = await api("/api/deals", { ...draft, author: author() });
+    const deal = await api("/api/deals", draft);
     clearPost();
     replaceOrAdd(deal);
     closeSimilar(`Posted “${deal.item}”.`);
@@ -755,7 +761,6 @@ function jumpTo(id) {
 // --- start
 
 $("#store-filter").addEventListener("change", loadFeed);
-nickname.addEventListener("input", () => nickname.removeAttribute("aria-invalid"));
 // coming back to the tab picks up what others posted meanwhile
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
@@ -763,8 +768,7 @@ document.addEventListener("visibilitychange", () => {
   loadNotices();
 });
 
-saveMe();
-myId = await publicIdOf(me.key);
+me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");
 renderStoreOptions();

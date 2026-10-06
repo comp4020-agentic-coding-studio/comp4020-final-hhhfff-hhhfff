@@ -5,8 +5,8 @@ import { call, person, special, writes } from "./api.ts";
 // report stock, comment) and find their trace still there when they come back.
 // "Coming back" here is a fresh request from someone else entirely.
 
-const poster = person("spec poster");
-const passerby = person("spec passerby");
+const poster = await person("spec poster");
+const passerby = await person("spec passerby");
 
 describe.skipIf(!writes)("a stranger's trace is still there when they come back", () => {
   it("a posted special shows up for everyone, under its store", async () => {
@@ -43,7 +43,7 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     expect(again.data.retryAfter).toBeGreaterThan(0);
     expect((await call(`/api/deals/${deal.id}`)).data.stock).toBe("few");
 
-    const other = person("spec other");
+    const other = await person("spec other");
     const res = await call(url, { stock: "some", author: other.as });
     expect(res.status).toBe(200);
     expect(res.data.stockHistory.map((r: any) => r.stock)).toEqual(["some", "few", "plenty"]);
@@ -57,14 +57,16 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     expect((await call("/api/deals")).data.some((d: any) => d.item === item)).toBe(false);
   });
 
-  it("nobody's secret key ever appears in what the server sends back", async () => {
+  it("no password, hash or session token ever appears in what the server sends back", async () => {
     const { data: deal } = await call("/api/deals", special(poster));
     await call(`/api/deals/${deal.id}/comments`, { body: "hi", author: passerby.as });
     const everything = JSON.stringify([
       (await call("/api/deals")).data,
       (await call(`/api/deals/${deal.id}/comments`)).data,
+      (await call("/api/me", undefined, poster.as)).data,
     ]);
-    expect(everything).not.toContain(poster.key);
-    expect(everything).not.toContain(passerby.key);
+    for (const secret of [poster.as.cookie.slice(4), passerby.as.cookie.slice(4), "spec-password-1", "pw_hash"]) {
+      expect(everything).not.toContain(secret);
+    }
   });
 });

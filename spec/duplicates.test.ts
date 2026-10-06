@@ -7,7 +7,7 @@ import { call, person, special, uniqueItem, writes } from "./api.ts";
 
 describe.skipIf(!writes)("one person, one post per item per store", () => {
   it("refuses a second post of the same item at the same store, however it's written", async () => {
-    const me = person("spec repeater");
+    const me = await person("spec repeater");
     const item = uniqueItem("Tim Tams 200g");
     const first = await call("/api/deals", special(me, { item }));
     expect(first.status).toBe(201);
@@ -21,18 +21,18 @@ describe.skipIf(!writes)("one person, one post per item per store", () => {
   });
 
   it("still lets the same person post it at another store, and someone else post it here", async () => {
-    const me = person("spec shopper");
+    const me = await person("spec shopper");
     const item = uniqueItem("Bananas 1kg");
     expect((await call("/api/deals", special(me, { item }))).status).toBe(201);
     expect((await call("/api/deals", special(me, { item, storeId: "aldi-civic" }))).status).toBe(201);
-    expect((await call("/api/deals", special(person("spec other"), { item }))).status).toBe(201);
+    expect((await call("/api/deals", special(await person("spec other"), { item }))).status).toBe(201);
   });
 });
 
 describe.skipIf(!writes)("before posting, the poster sees what's already there", () => {
   it("finds a close match at the same store, and not at a different one", async () => {
     const tag = crypto.randomUUID().slice(0, 6);
-    const { data: posted } = await call("/api/deals", special(person("spec first"), { item: `Zorbo${tag} biscuits 200g` }));
+    const { data: posted } = await call("/api/deals", special(await person("spec first"), { item: `Zorbo${tag} biscuits 200g` }));
 
     const near = await call(`/api/deals/similar?store=coles-civic&item=${encodeURIComponent(`200g zorbo${tag} biscuit`)}`);
     expect(near.status).toBe(200);
@@ -43,8 +43,8 @@ describe.skipIf(!writes)("before posting, the poster sees what's already there",
   });
 
   it("'same and correct' is a confirmation: once per person, and not by the poster", async () => {
-    const poster = person("spec poster");
-    const fan = person("spec fan");
+    const poster = await person("spec poster");
+    const fan = await person("spec fan");
     const { data: deal } = await call("/api/deals", special(poster));
 
     expect((await call(`/api/deals/${deal.id}/confirm`, { author: fan.as })).status).toBe(201);
@@ -62,9 +62,9 @@ describe.skipIf(!writes)("the crowd corrects a post", () => {
     call(`/api/deals/${dealId}/corrections`, { field, value, note, author: by.as });
 
   it("three different people agreeing rewrites the post and tells the poster; two don't", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster, { nowCents: 275 }));
-    const [a, b, c] = [person("spec a"), person("spec b"), person("spec c")];
+    const [a, b, c] = [await person("spec a"), await person("spec b"), await person("spec c")];
 
     expect((await correct(deal.id, a, "nowCents", 300, "shelf tag says $3")).data).toMatchObject({ applied: false, votes: 1 });
     // saying it twice is still one person
@@ -87,16 +87,16 @@ describe.skipIf(!writes)("the crowd corrects a post", () => {
   });
 
   it("people suggesting different values don't add up", async () => {
-    const { data: deal } = await call("/api/deals", special(person("spec poster")));
-    await correct(deal.id, person("spec a"), "nowCents", 300);
-    await correct(deal.id, person("spec b"), "nowCents", 310);
-    const r = await correct(deal.id, person("spec c"), "nowCents", 320);
+    const { data: deal } = await call("/api/deals", special(await person("spec poster")));
+    await correct(deal.id, await person("spec a"), "nowCents", 300);
+    await correct(deal.id, await person("spec b"), "nowCents", 310);
+    const r = await correct(deal.id, await person("spec c"), "nowCents", 320);
     expect(r.data.applied).toBe(false);
     expect((await call(`/api/deals/${deal.id}`)).data.pending).toHaveLength(3);
   });
 
   it("the poster's own correction applies at once, with no notice to themselves", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster));
     expect((await correct(deal.id, poster, "endsOn", "2099-12-31")).data.applied).toBe(true);
     expect((await call(`/api/deals/${deal.id}`)).data).toMatchObject({ endsOn: "2099-12-31" });
@@ -104,15 +104,15 @@ describe.skipIf(!writes)("the crowd corrects a post", () => {
   });
 
   it("knowing the poster's public id doesn't let you correct as them", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster));
-    const impostor = { as: { key: deal.author.id, name: poster.name } };
-    expect((await correct(deal.id, impostor, "nowCents", 100)).data.applied).toBe(false);
+    const impostor = { as: { cookie: `sid=${deal.author.id}` } };
+    expect((await correct(deal.id, impostor, "nowCents", 100)).status).toBe(401);
     expect((await call(`/api/deals/${deal.id}`)).data.nowCents).toBe(275);
   });
 
   it("a correction can't make the special dearer than the usual price", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster, { wasCents: 550, nowCents: 275 }));
     expect((await correct(deal.id, poster, "nowCents", 600)).status).toBe(400);
   });

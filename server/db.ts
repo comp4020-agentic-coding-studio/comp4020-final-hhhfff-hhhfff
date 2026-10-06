@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { newUserId, tokenHash, type User } from "./auth.ts";
 import { itemKey, SIMILAR_ENOUGH, similarity } from "./match.ts";
 
 // Everything that persists lives in one SQLite file on the Fly volume (/data
@@ -158,6 +159,23 @@ db.exec(`
     text       TEXT NOT NULL,
     created_at TEXT NOT NULL,
     seen_at    TEXT
+  );
+
+  -- accounts: users.id is the public id that appears on posts; a session's
+  -- token itself is never stored, only its hash
+  CREATE TABLE IF NOT EXISTS users (
+    id         TEXT PRIMARY KEY,
+    username   TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    pw_salt    TEXT NOT NULL,
+    pw_hash    TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT 'user',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id),
+    expires_at TEXT NOT NULL
   );
 
   CREATE INDEX IF NOT EXISTS deals_store ON deals(store_id, created_at);
@@ -387,6 +405,64 @@ export function stockWait(dealId: number, author: Author): number {
   if (!last) return 0;
   const left = Date.parse(last.created_at as string) + STOCK_COOLDOWN_MS - Date.now();
   return left > 0 ? Math.ceil(left / 1000) : 0;
+}
+
+// --- accounts and sessions
+
+export interface Account extends User {
+  salt: string;
+  hash: string;
+}
+
+const toAccount = (r: Row): Account => ({
+  id: r.id as string,
+  name: r.username as string,
+  role: r.role as User["role"],
+  salt: r.pw_salt as string,
+  hash: r.pw_hash as string,
+});
+
+// Returns null if the username is taken (usernames compare without case).
+export function createUser(username: string, salt: string, hash: string, role: User["role"]): User | null {
+  const id = newUserId();
+  const { changes } = db
+    .prepare(
+      `INSERT INTO users (id, username, pw_salt, pw_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (username) DO NOTHING`,
+    )
+    .run(id, username, salt, hash, role, now());
+  return Number(changes) > 0 ? { id, name: username, role } : null;
+}
+
+export function accountByName(username: string): Account | null {
+  const r = db.prepare(`SELECT * FROM users WHERE username = ?`).get(username) as Row | undefined;
+  return r ? toAccount(r) : null;
+}
+
+// Admins come from the ADMIN_USERS environment variable, not from the API.
+export function setAdmins(usernames: string[]): void {
+  const promote = db.prepare(`UPDATE users SET role = 'admin' WHERE username = ?`);
+  for (const u of usernames) promote.run(u);
+}
+
+export function startSession(user: User, token: string, days: number): void {
+  const expires = new Date(Date.now() + days * 86_400_000).toISOString();
+  db.prepare(`DELETE FROM sessions WHERE expires_at < ?`).run(now());
+  db.prepare(`INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)`).run(tokenHash(token), user.id, expires);
+}
+
+export function userForToken(token: string): User | null {
+  const r = db
+    .prepare(
+      `SELECT u.id, u.username, u.role FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.expires_at > ?`,
+    )
+    .get(tokenHash(token), now()) as Row | undefined;
+  return r ? { id: r.id as string, name: r.username as string, role: r.role as User["role"] } : null;
+}
+
+export function endSession(token: string): void {
+  db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(tokenHash(token));
 }
 
 export function reportStock(dealId: number, stock: Stock, author: Author): void {

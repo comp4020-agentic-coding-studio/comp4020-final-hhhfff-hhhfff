@@ -9,17 +9,17 @@ const remove = (dealId: number, by: { as: unknown }) => call(`/api/deals/${dealI
 
 describe.skipIf(!writes)("deleting a post", () => {
   it("only the poster can delete it: not someone else, not someone holding the poster's public id", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster));
 
-    expect((await remove(deal.id, person("spec stranger"))).status).toBe(403);
-    expect((await remove(deal.id, { as: { key: deal.author.id, name: poster.name } })).status).toBe(403);
+    expect((await remove(deal.id, await person("spec stranger"))).status).toBe(403);
+    expect((await remove(deal.id, { as: { cookie: `sid=${deal.author.id}` } })).status).toBe(401);
     expect((await call(`/api/deals/${deal.id}`)).status).toBe(200);
   });
 
   it("the poster can delete it even after others confirmed, commented and suggested corrections", async () => {
-    const poster = person("spec poster");
-    const other = person("spec other");
+    const poster = await person("spec poster");
+    const other = await person("spec other");
     const { data: deal } = await call("/api/deals", special(poster));
     await call(`/api/deals/${deal.id}/confirm`, { author: other.as });
     await call(`/api/deals/${deal.id}/comments`, { body: "nice find", author: other.as });
@@ -29,8 +29,8 @@ describe.skipIf(!writes)("deleting a post", () => {
   });
 
   it("a deleted post is gone from the feed, the duplicate check, and can't be acted on", async () => {
-    const poster = person("spec poster");
-    const other = person("spec other");
+    const poster = await person("spec poster");
+    const other = await person("spec other");
     const { data: deal } = await call("/api/deals", special(poster));
     await remove(deal.id, poster);
 
@@ -47,7 +47,7 @@ describe.skipIf(!writes)("deleting a post", () => {
   });
 
   it("after deleting, the poster can post the same item there again", async () => {
-    const poster = person("spec poster");
+    const poster = await person("spec poster");
     const { data: deal } = await call("/api/deals", special(poster));
     await remove(deal.id, poster);
     expect((await call("/api/deals", special(poster, { item: deal.item }))).status).toBe(201);

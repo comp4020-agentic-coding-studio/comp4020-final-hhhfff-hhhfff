@@ -133,6 +133,30 @@ button.small {
   margin: 0;
 }
 
+.me .who {
+  margin: 0;
+  flex: 1 1 14rem;
+}
+
+.me .auth {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.me .auth label {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.me .auth .actions,
+.me .auth .hint,
+.me .auth .error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .tag {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
