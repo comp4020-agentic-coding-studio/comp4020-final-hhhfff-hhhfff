@@ -16,6 +16,7 @@ import {
   ownDuplicate,
   proposeCorrection,
   reportStock,
+  stockWait,
   similarDeals,
   SOURCES,
   STOCK_LEVELS,
@@ -292,7 +293,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if ((m = path.match(/^\/api\/deals\/(\d+)\/stock$/)) && method === "POST") {
     const id = dealId(m[1]);
     const b = await readJson(req);
-    reportStock(id, oneOf<Stock>(b.stock, STOCK_LEVELS, "stock"), author(b.author));
+    const stock = oneOf<Stock>(b.stock, STOCK_LEVELS, "stock");
+    const by = author(b.author);
+    const wait = stockWait(id, by);
+    if (wait) throw new HttpError(429, `You just reported this. Try again in ${wait}s.`, { retryAfter: wait });
+    reportStock(id, stock, by);
     return send(res, 200, getDeal(id));
   }
 

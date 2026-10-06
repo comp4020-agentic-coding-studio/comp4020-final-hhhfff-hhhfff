@@ -26,7 +26,7 @@ posts, is what the design serves:
    Two people, or three with different fixes, change nothing. The poster's
    own correction applies at once.
 3. **Stock is a first-class fact.** Anyone can report plenty, some, few or
-   gone, with name and time, because "gone" is how a markdown usually ends.
+   gone, with name and time, because "gone" is how a markdown usually ends. One person can report a given post once a minute, and the last few reports stay visible, so a flip-flop shows rather than silently winning.
 4. **Specials are cheaper, or they are not specials.** A post not below the
    usual price never reaches the feed, and no correction can change that.
 
@@ -39,7 +39,7 @@ post.
 
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 the confirmation and three-person correction rules, poster-only delete, the
-price check, and the secret key never leaking.
+price check, the one-minute stock-report limit, and the secret key never leaking.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;

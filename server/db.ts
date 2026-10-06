@@ -41,6 +41,12 @@ export interface AppliedCorrection {
   at: string;
 }
 
+export interface StockReport {
+  stock: Stock;
+  by: Author;
+  at: string;
+}
+
 export interface Deal {
   id: number;
   storeId: string;
@@ -54,6 +60,7 @@ export interface Deal {
   stock: Stock;
   stockBy: Author;
   stockAt: string;
+  stockHistory: StockReport[];
   comments: number;
   confirmations: number;
   confirmedBy: Author[];
@@ -257,6 +264,19 @@ function historyFor(dealId: number): AppliedCorrection[] {
   });
 }
 
+// The latest few reports, newest first, so a sudden flip-flop is visible.
+const STOCK_HISTORY = 5;
+function recentStock(dealId: number): StockReport[] {
+  const rows = db
+    .prepare(`SELECT stock, author_id, author_name, created_at FROM stock_reports WHERE deal_id = ? ORDER BY id DESC LIMIT ?`)
+    .all(dealId, STOCK_HISTORY) as Row[];
+  return rows.map((r) => ({
+    stock: r.stock as Stock,
+    by: { id: r.author_id as string, name: r.author_name as string },
+    at: r.created_at as string,
+  }));
+}
+
 function toDeal(r: Row): Deal {
   const id = r.id as number;
   const confirmedBy = (
@@ -275,6 +295,7 @@ function toDeal(r: Row): Deal {
     stock: r.stock as Stock,
     stockBy: { id: r.stock_author_id as string, name: r.stock_author_name as string },
     stockAt: r.stock_at as string,
+    stockHistory: recentStock(id),
     comments: Number(r.comments),
     confirmations: confirmedBy.length,
     confirmedBy,
@@ -354,6 +375,18 @@ export function createDeal(d: NewDeal): Deal {
 
 export function deleteDeal(id: number): void {
   db.prepare(`UPDATE deals SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now(), id);
+}
+
+// One person may report a deal's stock once per STOCK_COOLDOWN_MS, so nobody
+// can flip it back and forth. Returns the seconds still to wait, or 0.
+export const STOCK_COOLDOWN_MS = 60_000;
+export function stockWait(dealId: number, author: Author): number {
+  const last = db
+    .prepare(`SELECT created_at FROM stock_reports WHERE deal_id = ? AND author_id = ? ORDER BY id DESC LIMIT 1`)
+    .get(dealId, author.id) as Row | undefined;
+  if (!last) return 0;
+  const left = Date.parse(last.created_at as string) + STOCK_COOLDOWN_MS - Date.now();
+  return left > 0 ? Math.ceil(left / 1000) : 0;
 }
 
 export function reportStock(dealId: number, stock: Stock, author: Author): void {

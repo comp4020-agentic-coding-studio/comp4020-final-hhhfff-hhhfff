@@ -236,6 +236,10 @@ function dealCard(d, store, commentsOpen, correctOpen) {
     b.addEventListener("click", () => updateStock(d, b.dataset.stock));
   }
   $(".stock-by", li).textContent = `${STOCK_TEXT[d.stock]}, according to ${nameOf(d.stockBy)}, ${ago(d.stockAt)}`;
+  // earlier reports, so a sudden flip-flop is visible
+  $(".stock-history", li).textContent = d.stockHistory.length > 1
+    ? `Before that: ${d.stockHistory.slice(1).map((r) => `${STOCK_TEXT[r.stock]} (${nameOf(r.by)}, ${ago(r.at)})`).join("; ")}`
+    : "";
 
   // confirmations
   const confirmedByMe = d.confirmedBy.some(isMe);

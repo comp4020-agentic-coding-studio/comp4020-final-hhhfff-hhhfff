@@ -33,6 +33,23 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     expect(comments).toEqual([expect.objectContaining({ body: "all gone by 5pm", author: passerby.public })]);
   });
 
+  it("the same person can't flip a deal's stock again straight away; others can, and the trail is kept", async () => {
+    const { data: deal } = await call("/api/deals", special(poster));
+    const url = `/api/deals/${deal.id}/stock`;
+
+    expect((await call(url, { stock: "few", author: passerby.as })).status).toBe(200);
+    const again = await call(url, { stock: "gone", author: passerby.as });
+    expect(again.status).toBe(429);
+    expect(again.data.retryAfter).toBeGreaterThan(0);
+    expect((await call(`/api/deals/${deal.id}`)).data.stock).toBe("few");
+
+    const other = person("spec other");
+    const res = await call(url, { stock: "some", author: other.as });
+    expect(res.status).toBe(200);
+    expect(res.data.stockHistory.map((r: any) => r.stock)).toEqual(["some", "few", "plenty"]);
+    expect(res.data.stockHistory[0].by).toEqual(other.public);
+  });
+
   it("a 'special' that isn't cheaper is refused, and never reaches the feed", async () => {
     const item = `spec not-a-deal ${crypto.randomUUID().slice(0, 8)}`;
     const res = await call("/api/deals", special(poster, { item, wasCents: 200, nowCents: 300 }));
