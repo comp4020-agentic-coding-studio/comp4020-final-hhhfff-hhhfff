@@ -331,7 +331,10 @@ const active = `(d.ends_on IS NULL OR d.ends_on >= ?) AND d.deleted_at IS NULL`;
 export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
   const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
   const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
-  const rows = db.prepare(`${selectDeals} ${where} ORDER BY d.created_at DESC LIMIT 200`).all(...args);
+  // newest first, but sold-out posts after everything still on the shelf
+  const rows = db
+    .prepare(`${selectDeals} ${where} ORDER BY s.stock = 'gone', d.created_at DESC LIMIT 200`)
+    .all(...args);
   return rows.map((r) => toDeal(r as Row));
 }
 

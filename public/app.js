@@ -173,7 +173,11 @@ function replaceDeal(updated) {
   renderFeed();
 }
 
+// Sold-out posts go after the rest, as the server sends them; otherwise newest first.
+const shelfOrder = (list) => [...list].sort((a, b) => (a.stock === "gone") - (b.stock === "gone"));
+
 function renderFeed() {
+  deals = shelfOrder(deals);
   const byId = storeById();
   const keep = (sel) => new Set([...document.querySelectorAll(`#feed ${sel}[open]`)].map((d) => d.closest("li").dataset.id));
   const [openComments, openCorrect] = [keep("details.comments"), keep("details.correct")];
@@ -836,6 +840,7 @@ async function refreshDeal(id) {
   deals = known ? deals.map((x) => (x.id === id ? d : x)) : [d, ...deals];
   const card = document.getElementById(`deal-${id}`);
   if (card && busy(card)) return; // the data is kept; the card catches up on the next render
+  if (card && card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
   const fresh = dealCard(
     d,
     storeById().get(d.storeId),

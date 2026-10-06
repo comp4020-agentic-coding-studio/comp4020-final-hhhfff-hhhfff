@@ -50,6 +50,21 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     expect(res.data.stockHistory[0].by).toEqual(other.public);
   });
 
+  it("sold-out specials sort after the ones still on the shelf, and come back up when restocked", async () => {
+    const { data: older } = await call("/api/deals", special(poster));
+    const { data: newer } = await call("/api/deals", special(poster));
+    const order = async () =>
+      (await call("/api/deals?store=coles-civic")).data.map((d: any) => d.id).filter((id: number) => id === older.id || id === newer.id);
+
+    expect(await order()).toEqual([newer.id, older.id]);
+    await call(`/api/deals/${newer.id}/stock`, { stock: "gone", author: passerby.as });
+    expect(await order()).toEqual([older.id, newer.id]);
+
+    const restocker = await person("spec restocker");
+    await call(`/api/deals/${newer.id}/stock`, { stock: "some", author: restocker.as });
+    expect(await order()).toEqual([newer.id, older.id]);
+  });
+
   it("a 'special' that isn't cheaper is refused, and never reaches the feed", async () => {
     const item = `spec not-a-deal ${crypto.randomUUID().slice(0, 8)}`;
     const res = await call("/api/deals", special(poster, { item, wasCents: 200, nowCents: 300 }));
