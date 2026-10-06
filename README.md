@@ -7,51 +7,44 @@ shop there.
 
 Coles and Aldi publish their specials weeks ahead. The small shops students
 actually rely on, the Asian grocers and convenience stores around Civic,
-Acton and Dickson, mostly have no website at all. I work at one of them,
-Daily Market. When stock nears its expiry date, the shop decides on the
-spot to mark it down, and nothing announces it. Stock moves fast and
-restocking is slow, so a bargain can be gone within the hour, and a student
+Acton and Dickson, mostly have no website. I work at one, Daily Market.
+When stock nears its expiry date, the shop marks it down on the spot, and
+nothing announces it. A bargain can be gone within the hour, and a student
 who would grab it has no way to find out.
 
 So discountShow is good if a student can **trust a single post enough to
 walk to the shop for it**. A stale price or empty shelf costs them the
-trip, and after twice they stop looking. That standard, not the number of
-posts, is what the design serves:
+trip, and after twice they stop looking. The design serves that standard,
+not the number of posts:
 
-1. **One post per item per store.** A repeat is refused and points at the
-   existing post, so the feed never shows conflicting prices.
-2. **The crowd corrects posts, not just the poster.** Any user can say "same
-   and correct". If the price, item or end date is wrong, three different
+1. **One live post per item per store.** A repeat, from anyone, is refused
+   and points at the existing post, so the feed never shows conflicting
+   prices.
+2. **The crowd corrects posts.** Anyone can confirm a post ("same and
+   correct"). If the price, item or end date is wrong, three different
    people proposing the same fix rewrites the post and the poster is told.
-   Two people, or three with different fixes, change nothing. The poster's
-   own correction applies at once.
-3. **Stock is a first-class fact.** Any user can report plenty, some, few or
-   gone, with name and time, because "gone" is how a markdown usually ends.
-   One person can report a given post once a minute, and the last few
-   reports stay visible, so a flip-flop shows rather than silently winning.
-4. **Specials are cheaper, or they are not specials.** A post not below the
-   usual price never reaches the feed, and no correction can change that.
+   The poster's own correction applies at once.
+3. **Stock is a first-class fact.** Anyone can report plenty, some, few or
+   gone, because "gone" is how a markdown usually ends. One report per
+   person per post a minute, and recent reports stay visible.
+4. **Specials are cheaper, or they are not specials.** No post or
+   correction can put a special at or above the usual price.
+5. **"Gone" arrives before the walk.** An open page shows anyone's change
+   within a moment, with no reload.
 
-Everyone can read; to post, confirm, correct, report stock or comment you
-log in. I first left accounts out, because low friction matters in an aisle,
-and a nickname with a browser-held key was enough. But the rules above all
-count *people*, and a new browser was a new person: three "different"
-people could be one, and a one-a-minute limit could be dodged by clearing
-storage. So an account is a username and password, and the same login in
-another browser is the same person. The cost is one sign-up before a first
-post; reading stays free. Roles are guest (read only), user (the above,
-and delete their own post) and admin (also delete any post, named in the
-server's `ADMIN_USERS`). Passwords are stored only as salted hashes and
-the session is an HttpOnly cookie; the server never sends either back.
+Reading is free; writing needs an account. I first used a nickname and a
+browser-held key, since friction matters in an aisle. But the rules above
+count *people*, and a new browser was a new person, so three "different"
+people could be one. Now the same login in any browser is the same person.
 Only the poster, or an admin, can delete a post.
 
 ## What is enforced and what is judged
 
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
-the confirmation and three-person correction rules, poster-only delete, the
-price check, the one-minute stock-report limit, guests being read-only,
-logins working across browsers, no password or session token ever
-leaking, and live updates reaching an open page (carrying ids only).
+including simultaneous posts; the confirmation and three-person correction
+rules; poster-only delete; the price check; the stock-report limit; guests
+being read-only; logins across browsers; no password or session token
+leaking; and live updates reaching an open page.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
@@ -60,31 +53,19 @@ it with strangers.
 
 ## Sources and what I left out
 
-What I looked at while deciding:
-
-- **The big chains' specials pages.** They cover only their own shops and
-  say nothing about the small grocers.
+- **The big chains' specials pages** cover only their own shops.
 - **Xiaohongshu (RedNote).** Students share bargains there, but posts are
-  scattered and rarely live; it is not what the platform is for.
-- **PetrolSpy**, where drivers report fuel prices on a map across
-  Australia. It showed me people will keep prices current for strangers,
-  and it is the model for crowd-reported prices here.
-- **My friends.** They find cheap food by chance in a shop or on
-  Xiaohongshu and pass it on in chat. It works, but only by luck.
+  scattered and rarely live.
+- **PetrolSpy**, where drivers report fuel prices for strangers, is the
+  model for crowd-reported prices here.
+- **My friends** find cheap food by chance and pass it on in chat, by
+  luck.
 
-The shop list comes from OpenStreetMap, petrol stations dropped. Each post
-records where the poster saw it (in-store, store website, catalogue or
-word-of-mouth), so readers can weigh it.
+The shop list comes from OpenStreetMap. Each post records where the poster
+saw it (in store, website, catalogue or word of mouth), so readers can
+weigh it.
 
-I chose not to build email or social login, password reset, receipt
-photos, price-history charts or website scraping: each adds friction or a
-claim the app cannot check (so a forgotten password means a new account),
-and the shops that matter most have no website.
-
-An open page updates itself: a new post, a stock report, a confirmation, a
-comment or a delete from anyone shows within a moment, because "gone" is
-only useful if it arrives before the walk. It is a one-way stream of "this
-deal changed" (ids only; the page fetches what it may see), so guests get
-it too, and a card you are typing in is left alone until you finish. If the
-connection drops the page catches up when it reconnects. It is not built
-for crowds: at most 300 pages can listen at once.
+I chose not to build email login, password reset, receipt photos,
+price-history charts or website scraping: each adds friction or a claim
+the app cannot check, and the shops that matter most have no website.
+At most 300 pages can watch live at once.
