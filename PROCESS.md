@@ -16,6 +16,14 @@ app, discountShow, and it fixed what "good" had to mean: a student can trust
 one post enough to walk to the shop. The README argues this, and each rule in
 `CLAUDE.md` is derived from it.
 
+The grounding is thin and I say so. I looked at the big chains' specials
+pages, Xiaohongshu, where bargains turn up by chance and scattered, and
+PetrolSpy, where drivers report fuel prices on a map, which showed me
+strangers will keep prices current. I added these to the README after the
+first draft
+([`db68982`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/db68982)).
+I did not survey anyone beyond my friends.
+
 ## The stack and why
 
 The server is Node 24 running TypeScript directly, with `node:sqlite` on the
