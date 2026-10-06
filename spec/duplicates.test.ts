@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { call, person, special, uniqueItem, writes } from "./api.ts";
 
-// One special, one post: a person can't post the same item at the same store
-// twice, a poster is shown what's already there before posting, and wrong
-// details are fixed by the crowd rather than by posting again.
+// One special, one post: nobody can post an item at a store where it already
+// has a live post, a poster is shown what's already there before posting, and
+// wrong details are fixed by the crowd rather than by posting again.
 
-describe.skipIf(!writes)("one person, one post per item per store", () => {
+describe.skipIf(!writes)("one live post per item per store", () => {
   it("refuses a second post of the same item at the same store, however it's written", async () => {
     const me = await person("spec repeater");
     const item = uniqueItem("Tim Tams 200g");
@@ -20,12 +20,51 @@ describe.skipIf(!writes)("one person, one post per item per store", () => {
     expect(feed.filter((d: any) => d.author.id === me.public.id)).toHaveLength(1);
   });
 
-  it("still lets the same person post it at another store, and someone else post it here", async () => {
+  it("lets it be posted at another store, but not by someone else at the same store", async () => {
     const me = await person("spec shopper");
     const item = uniqueItem("Bananas 1kg");
-    expect((await call("/api/deals", special(me, { item }))).status).toBe(201);
+    const first = await call("/api/deals", special(me, { item }));
+    expect(first.status).toBe(201);
     expect((await call("/api/deals", special(me, { item, storeId: "aldi-civic" }))).status).toBe(201);
-    expect((await call("/api/deals", special(await person("spec other"), { item }))).status).toBe(201);
+
+    const theirs = await call("/api/deals", special(await person("spec other"), { item: `  ${item.toLowerCase()} ` }));
+    expect(theirs.status).toBe(409);
+    expect(theirs.data.existing.id).toBe(first.data.id);
+    expect(theirs.data.error).toContain("confirm or correct");
+  });
+
+  it("when several people post the same thing at the same moment, exactly one gets in", async () => {
+    const item = uniqueItem("Rice 5kg");
+    const people = await Promise.all([1, 2, 3, 4, 5].map((n) => person(`spec racer ${n}`)));
+    const results = await Promise.all(people.map((p) => call("/api/deals", special(p, { item }))));
+
+    const created = results.filter((r) => r.status === 201);
+    expect(created).toHaveLength(1);
+    expect(results.filter((r) => r.status === 409).map((r) => r.data.existing.id)).toEqual(
+      Array(4).fill(created[0].data.id),
+    );
+    const feed = (await call("/api/deals?store=coles-civic")).data;
+    expect(feed.filter((d: any) => d.item === item)).toHaveLength(1);
+  });
+
+  it("once the live post is deleted, someone else can post it there", async () => {
+    const poster = await person("spec poster");
+    const item = uniqueItem("Oat milk 1L");
+    const { data: deal } = await call("/api/deals", special(poster, { item }));
+    await call(`/api/deals/${deal.id}/delete`, { author: poster.as });
+    expect((await call("/api/deals", special(await person("spec next"), { item }))).status).toBe(201);
+  });
+
+  it("a correction can't rename a post into a second live post for an item", async () => {
+    const [a, b] = [await person("spec a"), await person("spec b")];
+    const taken = uniqueItem("Eggs 12pk");
+    await call("/api/deals", special(a, { item: taken }));
+    const { data: other } = await call("/api/deals", special(b));
+
+    // the poster's own correction would apply at once, so it is the sharpest case
+    const res = await call(`/api/deals/${other.id}/corrections`, { field: "item", value: taken, author: b.as });
+    expect(res.status).toBe(409);
+    expect((await call(`/api/deals/${other.id}`)).data.item).toBe(other.item);
   });
 });
 

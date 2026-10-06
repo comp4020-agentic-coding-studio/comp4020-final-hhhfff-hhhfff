@@ -197,7 +197,8 @@ if (!columns("deals").includes("item_key")) {
     set.run(itemKey(r.item), r.id);
   }
 }
-db.exec(`CREATE INDEX IF NOT EXISTS deals_dupe ON deals(author_id, store_id, item_key)`);
+db.exec(`DROP INDEX IF EXISTS deals_dupe`);
+db.exec(`CREATE INDEX IF NOT EXISTS deals_live ON deals(store_id, item_key)`);
 
 // A deleted deal is hidden, not removed: other people's comments,
 // confirmations and corrections on it stay in the database.
@@ -356,10 +357,12 @@ export function similarDeals(storeId: string, item: string, today: string): (Dea
 
 // The one-post-per-person rule: this person's active deal for the same item
 // at the same store, if there is one.
-export function ownDuplicate(authorId: string, storeId: string, item: string, today: string): Deal | null {
+// The live post for this item at this store, whoever posted it (other than
+// `exceptId`). One item, one store, one live post: README point 1.
+export function liveDuplicate(storeId: string, item: string, today: string, exceptId = 0): Deal | null {
   const row = db
-    .prepare(`SELECT d.id FROM deals d WHERE d.author_id = ? AND d.store_id = ? AND d.item_key = ? AND ${active}`)
-    .get(authorId, storeId, itemKey(item), today) as { id: number } | undefined;
+    .prepare(`SELECT d.id FROM deals d WHERE d.store_id = ? AND d.item_key = ? AND d.id != ? AND ${active}`)
+    .get(storeId, itemKey(item), exceptId, today) as { id: number } | undefined;
   return row ? getDeal(row.id) : null;
 }
 
@@ -374,9 +377,13 @@ export interface NewDeal {
   author: Author;
 }
 
-export function createDeal(d: NewDeal): Deal {
+// Checks for a live duplicate and inserts in one transaction, so two people
+// posting the same thing at the same moment can't both get in.
+export function createDeal(d: NewDeal, today: string): { created: Deal } | { existing: Deal } {
   const at = now();
   const id = tx(() => {
+    const existing = liveDuplicate(d.storeId, d.item, today);
+    if (existing) return existing;
     const { lastInsertRowid } = db
       .prepare(
         `INSERT INTO deals (store_id, item, item_key, was_cents, now_cents, ends_on, source, author_id, author_name, created_at)
@@ -388,7 +395,7 @@ export function createDeal(d: NewDeal): Deal {
     ).run(lastInsertRowid, d.stock, d.author.id, d.author.name, at);
     return Number(lastInsertRowid);
   });
-  return getDeal(id)!;
+  return typeof id === "number" ? { created: getDeal(id)! } : { existing: id };
 }
 
 export function deleteDeal(id: number): void {

@@ -598,9 +598,9 @@ for (const panel of [post, similar]) {
 
 function showSimilar(matches) {
   $("#similar-list").replaceChildren(...matches.map(similarItem));
-  // you can't post a second copy of your own, so "post mine" only makes sense
-  // when every match is someone else's
-  $("#post-anyway").hidden = matches.some((m) => isMe(m.author) && m.score === 1);
+  // the server allows one live post per item per store, whoever posted it, so
+  // "post mine" only makes sense when none of these is the same item
+  $("#post-anyway").hidden = matches.some((m) => m.score === 1);
   post.hidden = true;
   similar.hidden = false;
   similar.focus();
@@ -747,7 +747,7 @@ async function publish() {
     closeSimilar(`Posted “${deal.item}”.`);
     jumpTo(deal.id);
   } catch (err) {
-    // the server's one-post-per-person rule: show the post that's already there
+    // the server's one-post-per-item-per-store rule: show the post that's already there
     if (err.status === 409 && err.data.existing) {
       showSimilar([{ ...err.data.existing, score: 1 }]);
       return;

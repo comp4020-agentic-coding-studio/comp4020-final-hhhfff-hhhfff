@@ -23,7 +23,9 @@ README, stop and say so rather than picking one.
 
 - Show a "special" that isn't cheaper than the usual price. Enforce on the
   server, including when applied through a correction.
-- Allow two live posts for the same item at the same store.
+- Allow two live posts for the same item at the same store, whoever posted
+  them, including when posted at the same moment or made so by a correction.
+  Check and write in one transaction (`createDeal`, `proposeCorrection`).
 - Reveal anyone's password, password hash or session token in any response,
   or let a public id (the user id shown on posts) stand in for a session.
 - Let a guest (no valid session) change anything. Identity comes only from

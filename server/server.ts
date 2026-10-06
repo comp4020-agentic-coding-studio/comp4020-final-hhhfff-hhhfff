@@ -17,7 +17,7 @@ import {
   getDeal,
   listComments,
   listDeals,
-  ownDuplicate,
+  liveDuplicate,
   proposeCorrection,
   reportStock,
   setAdmins,
@@ -29,6 +29,7 @@ import {
   takeNotifications,
   userForToken,
   type Author,
+  type Deal,
   type Field,
   type Source,
   type Stock,
@@ -320,26 +321,33 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const nowCents = cents(b.nowCents, "special price");
     if (nowCents >= wasCents) throw new HttpError(400, "the special price has to be lower than the usual price");
     const item = str(b.item, "item", 2, 80);
-    // one post per person per item per store while it's running: a change
-    // to your own special is a correction, not a second post
-    const existing = ownDuplicate(who.id, storeId, item, todayInCanberra());
-    if (existing) {
-      throw new HttpError(409, "you've already posted this item at this store; correct that post instead", {
-        existing,
-      });
+    // one live post per item per store, whoever posted it: a different price
+    // for the same thing is a correction, and "me too" is a confirmation
+    const result = createDeal(
+      {
+        storeId,
+        item,
+        wasCents,
+        nowCents,
+        endsOn: endsOn(b.endsOn),
+        stock: oneOf<Stock>(b.stock, STOCK_LEVELS, "stock"),
+        source: oneOf<Source>(b.source, SOURCES, "source"),
+        author: who,
+      },
+      todayInCanberra(),
+    );
+    if ("existing" in result) {
+      const { existing } = result;
+      throw new HttpError(
+        409,
+        existing.author.id === who.id
+          ? "you've already posted this item at this store; correct that post instead"
+          : "someone has already posted this item at this store; confirm or correct their post instead",
+        { existing },
+      );
     }
-    const deal = createDeal({
-      storeId,
-      item,
-      wasCents,
-      nowCents,
-      endsOn: endsOn(b.endsOn),
-      stock: oneOf<Stock>(b.stock, STOCK_LEVELS, "stock"),
-      source: oneOf<Source>(b.source, SOURCES, "source"),
-      author: who,
-    });
-    broadcast({ type: "deal", id: deal.id });
-    return send(res, 201, deal);
+    broadcast({ type: "deal", id: result.created.id });
+    return send(res, 201, result.created);
   }
 
   // possible duplicates, shown before posting so people join a deal instead of repeating it
@@ -384,7 +392,18 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (after.nowCents >= after.wasCents) {
       throw new HttpError(400, "the special price has to stay lower than the usual price");
     }
-    const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents);
+    // renaming (or reviving) a post must not make it a second live post for an item
+    const today = todayInCanberra();
+    const clash = (d: Deal): Deal | null =>
+      d.endsOn !== null && d.endsOn < today ? null : liveDuplicate(d.storeId, d.item, today, d.id);
+    const existing = clash(after);
+    if (existing) {
+      throw new HttpError(409, "another live post at this store already has that item; confirm or correct it instead", {
+        existing,
+      });
+    }
+    // checked again as it applies, inside the same transaction as the write
+    const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents && !clash(d));
     broadcast({ type: "deal", id });
     if (deal.author.id !== who.id) tell(deal.author.id, { type: "notice" });
     return send(res, result.applied ? 200 : 201, { ...result, deal: getDeal(id) });
