@@ -70,6 +70,8 @@ async function api(path, body) {
     ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
     : undefined);
   const data = await res.json().catch(() => ({}));
+  // the server may know me as someone else now (another tab logged in or out)
+  if (res.status === 401 || res.status === 403) syncMe();
   if (!res.ok) throw Object.assign(new Error(data.error ?? `request failed (${res.status})`), { status: res.status, data });
   return data;
 }
@@ -450,6 +452,22 @@ function showAuth(message = "") {
   $("#auth-error").textContent = message;
   authForm.elements.username.focus();
   authForm.scrollIntoView({ block: "center" });
+}
+
+// The session cookie is shared by every tab, so another tab can log in or out
+// as someone else. Ask the server who I am and catch up if it differs.
+async function syncMe() {
+  const now = await api("/api/me").catch(() => undefined);
+  if (now === undefined || (now?.id ?? null) === (me?.id ?? null)) return; // offline, or unchanged
+  me = now;
+  if (!me) {
+    $("#notices").replaceChildren();
+    $("#notices").hidden = true;
+  }
+  showMe();
+  connectLive();
+  await loadFeed();
+  loadNotices();
 }
 
 // Writes need an account: say so, and open the login form.
@@ -837,6 +855,7 @@ $("#store-filter").addEventListener("change", loadFeed);
 // coming back to the tab picks up what others posted meanwhile
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  syncMe();
   loadFeed();
   loadNotices();
 });
