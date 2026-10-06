@@ -10,37 +10,47 @@
   </head>
   <body>
     <header class="masthead">
-      <div class="wrap">
-        <h1>discountShow</h1>
-        <p class="tagline">Cheap food, spotted by students, for students. <a href="/readme/">About</a></p>
+      <div class="wrap masthead-row">
+        <div class="brand">
+          <h1>discountShow</h1>
+          <p class="tagline">Cheap food, spotted by students, for students.</p>
+        </div>
+        <nav class="top-links" aria-label="Site and account">
+          <a href="/readme/">About</a>
+          <span id="who" class="who"></span>
+          <button type="button" id="show-login" class="on-accent" aria-controls="account" aria-expanded="false">Log in</button>
+          <button type="button" id="logout" class="on-accent quiet" hidden>Log out</button>
+        </nav>
       </div>
     </header>
 
     <main class="wrap">
       <section id="notices" class="notices" aria-live="polite" aria-label="News about your posts" hidden></section>
 
-      <section class="me" id="account" aria-label="Your account">
-        <p id="who" class="who"></p>
-        <button type="button" id="show-login" class="small">Log in or register</button>
-        <button type="button" id="logout" class="quiet small" hidden>Log out</button>
-        <form id="auth" class="auth" novalidate hidden>
+      <!-- reading needs no account, so this stays folded until someone wants to write -->
+      <section id="account" class="card account" aria-labelledby="account-heading" hidden>
+        <div class="post-head">
+          <h2 id="account-heading">Log in or create an account</h2>
+          <button type="button" id="auth-cancel" class="quiet small">Cancel</button>
+        </div>
+        <p class="hint" id="auth-why">Browsing is free. An account lets you post, confirm, correct, report stock and comment, and it is the same you in any browser.</p>
+        <form id="auth" class="auth" novalidate>
           <label>Username <input name="username" maxlength="24" autocomplete="username" required /></label>
           <label>Password <input name="password" type="password" maxlength="128" autocomplete="current-password" required /></label>
+          <p class="hint">Username: 3–24 letters, digits, - or _. Password: at least 8 characters.</p>
+          <p class="error" role="alert" id="auth-error"></p>
           <div class="actions">
             <button type="submit">Log in</button>
             <button type="button" id="register-btn" class="quiet">Create account</button>
-            <button type="button" id="auth-cancel" class="quiet small">Cancel</button>
           </div>
-          <p class="hint">3–24 letters, digits, - or _. Password at least 8 characters.</p>
-          <p class="error" role="alert" id="auth-error"></p>
         </form>
       </section>
 
       <section class="filters" aria-label="Which stores">
         <label for="store-filter">Showing</label>
-        <select id="store-filter"></select>
-        <button type="button" id="locate" class="quiet">Sort stores by my location</button>
-        <p class="hint" id="locate-status" aria-live="polite">Stores are sorted by distance from ANU.</p>
+        <select id="store-filter"><option value="">Loading stores…</option></select>
+        <button type="button" id="locate" class="quiet" title="Sort stores by distance from where you are">Near me</button>
+        <p class="hint" id="locate-status" aria-live="polite"></p>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->
@@ -97,8 +107,8 @@
 
       <section aria-labelledby="feed-heading">
         <h2 id="feed-heading" class="visually-hidden">Specials</h2>
-        <p class="hint" id="feed-status" aria-live="polite"></p>
-        <ol id="feed" class="feed"></ol>
+        <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
+        <ol id="feed" class="feed" aria-busy="true"></ol>
       </section>
     </main>
 
@@ -126,7 +136,6 @@
           <button type="button" data-stock="gone">Sold out</button>
         </div>
         <p class="stock-by hint"></p>
-        <p class="stock-history hint"></p>
         <p class="trust">
           <span class="confirmed"></span>
           <button type="button" class="quiet small confirm">I saw this too, it's right</button>
@@ -134,7 +143,7 @@
         <ul class="history hint"></ul>
         <ul class="pending"></ul>
         <details class="correct">
-          <summary>Something's wrong? Suggest a correction</summary>
+          <summary>Wrong? Suggest a correction</summary>
           <form class="correct-form">
             <label>What's wrong
               <select name="field">
@@ -153,6 +162,7 @@
         <details class="comments">
           <summary></summary>
           <ol class="comment-list"></ol>
+          <button type="button" class="quiet small login-to-comment" hidden>Log in to comment</button>
           <form class="comment-form">
             <input name="body" maxlength="500" required aria-label="Comment" placeholder="Still there? Worth it? Add a comment" />
             <button type="submit">Reply</button>

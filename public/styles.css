@@ -31,14 +31,61 @@ body {
 .masthead {
   background: var(--accent);
   color: var(--accent-ink);
-  padding: 1rem 0 0.75rem;
+  padding: 0.75rem 0;
+}
+
+/* name on the left, About and the account on the right; wraps on a narrow phone */
+.masthead-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.top-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.top-links a {
+  color: inherit;
+}
+
+.top-links .who {
+  font-weight: 600;
+}
+
+.top-links .who:empty {
+  display: none;
+}
+
+/* buttons that sit on the red header */
+button.on-accent {
+  padding: 0.35rem 0.8rem;
+  background: var(--accent-ink);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+button.on-accent.quiet {
+  background: transparent;
+  color: var(--accent-ink);
+  border: 1px solid rgb(255 255 255 / 0.6);
+}
+
+.masthead .top-links :focus-visible {
+  outline-color: #fff;
 }
 
 .masthead h1,
 .masthead .title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .masthead .title a {
@@ -46,7 +93,9 @@ body {
 }
 
 .tagline {
-  margin: 0.25rem 0 0;
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.95;
 }
 
 .tagline a {
@@ -108,23 +157,18 @@ button.small {
   font-size: 0.85rem;
 }
 
-.me,
+/* one row on any screen: label, store list, "Near me" */
 .filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  margin: 1rem 0;
-}
-
-.me input {
-  width: auto;
-  flex: 1 1 10rem;
+  margin: 0.75rem 0;
 }
 
 .filters select {
   width: auto;
-  flex: 1 1 14rem;
+  flex: 1 1 10rem;
   min-width: 0;
 }
 
@@ -133,38 +177,35 @@ button.small {
   margin: 0;
 }
 
-.me .who {
-  margin: 0;
-  flex: 1 1 14rem;
+.hint:empty {
+  display: none;
 }
 
-.me .auth {
-  flex-basis: 100%;
+.account {
+  margin: 0.75rem 0;
+}
+
+.account .auth {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.5rem 0.75rem;
 }
 
-.me .auth label {
+.account .auth label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
   flex: 1 1 12rem;
   min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
-.me .auth .actions,
-.me .auth .hint,
-.me .auth .error {
+.account .auth .actions,
+.account .auth .hint,
+.account .auth .error {
   flex-basis: 100%;
   margin: 0;
-}
-
-.tag {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* an empty tag still takes a gap in the row, which narrows the input beside it */
-.tag:empty {
-  display: none;
 }
 
 .post-toggle {
@@ -300,7 +341,7 @@ button.small {
 }
 
 .meta {
-  margin: 0 0 0.6rem;
+  margin: 0 0 0.5rem;
   font-size: 0.9rem;
   color: var(--muted);
 }
@@ -338,11 +379,29 @@ button.small {
 
 .stock-by {
   margin: 0.3rem 0 0.5rem;
+  font-size: 0.85rem;
 }
 
 .sold-out .prices,
 .sold-out h3 {
   opacity: 0.55;
+}
+
+/* sold out says so up front, not only in the faded price */
+.sold-out .deal-head::after {
+  content: "Sold out";
+  align-self: start;
+  order: -1;
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.login-to-comment {
+  margin: 0 0 0.5rem;
 }
 
 .comments summary {
@@ -402,6 +461,10 @@ button.small {
 
 .trust button {
   margin: 0;
+}
+
+.trust .confirmed:empty {
+  display: none;
 }
 
 .history,
@@ -563,6 +626,52 @@ button.danger {
   .post .grid {
     grid-template-columns: 1fr;
   }
+
+  /* a phone gets the first special on screen sooner (the readme keeps its back link) */
+  body:not(.readme) .tagline {
+    display: none;
+  }
+
+  .deal {
+    padding: 0.85rem;
+  }
+
+  .filters label {
+    font-size: 0.9rem;
+  }
+}
+
+/* the narrowest phones (360px): keep the header, the store row and the four
+   stock buttons each on one line */
+@media (max-width: 24rem) {
+  .masthead h1 {
+    font-size: 1.2rem;
+  }
+
+  .masthead-row {
+    column-gap: 0.5rem;
+  }
+
+  .top-links {
+    gap: 0.45rem;
+    font-size: 0.9rem;
+  }
+
+  button.on-accent {
+    padding: 0.3rem 0.55rem;
+  }
+
+  .filters select {
+    flex-basis: 6rem;
+  }
+
+  .stock {
+    gap: 0.25rem;
+  }
+
+  .stock button {
+    padding: 0.25rem 0.4rem;
+  }
 }
 
 /* Wide screens: the controls and forms keep a comfortable width, and the
@@ -585,12 +694,9 @@ button.danger {
     margin-inline: auto;
   }
 
-  body:not(.readme) .masthead .wrap {
-    text-align: center;
-  }
-
-  .filters .hint {
-    text-align: center;
+  .account {
+    max-width: 44rem;
+    margin-inline: auto;
   }
 
   /* equal columns filling the centred .wrap, the same width as the post button */

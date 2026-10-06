@@ -50,6 +50,14 @@ README, stop and say so rather than picking one.
 
 - Specials come first on the page; the post form stays folded. A guest sees
   the feed and a prompt to log in, and the write buttons ask them to.
+- A guest's card is read-only: how much is left, confirmations, corrections
+  and comments, with no buttons that would only be refused. Sold-out posts
+  sort after the rest. Before anything loads, the page says it's loading.
+- Check UI changes by looking at 360px, 400px and desktop, logged in and as
+  a guest. Plain headless Chrome below ~500px lays out wider than asked, and
+  `--dump-dom`/`--virtual-time-budget` never finish because of the live
+  stream; drive Chrome over its DevTools protocol instead, and close each tab
+  (each holds a live connection, and plain HTTP allows six per host).
 - Works at phone width (~400px) and desktop, with no horizontal scroll.
 - Prices are integer cents in storage, dollars in display. "Today" is
   Canberra's today.

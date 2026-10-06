@@ -34,7 +34,7 @@ function ago(iso) {
 const dayFmt = new Intl.DateTimeFormat("en-AU", { weekday: "short", day: "numeric", month: "short" });
 const ymd = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Canberra" }).format(d);
 const dayText = (date) => (date === ymd(new Date()) ? "today" : dayFmt.format(new Date(`${date}T12:00:00`)));
-const endsText = (endsOn) => (endsOn ? `ends ${dayText(endsOn)}` : "no end date given");
+const endsText = (endsOn) => (endsOn ? `ends ${dayText(endsOn)}` : "no end date");
 
 const SOURCE_TEXT = {
   "in-store": "seen in store",
@@ -160,21 +160,33 @@ let deals = [];
 
 async function loadFeed() {
   const store = $("#store-filter").value;
+  const feed = $("#feed");
+  const status = $("#feed-status");
+  feed.setAttribute("aria-busy", "true");
+  if (!feed.children.length) status.textContent = "Loading specials…";
   try {
     deals = await api(`/api/deals${store ? `?store=${encodeURIComponent(store)}` : ""}`);
     renderFeed();
   } catch (err) {
-    $("#feed-status").textContent = `Couldn't load specials: ${err.message}`;
+    // on a slow or dropped connection, say so and offer a way back, keeping what's shown
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "quiet small";
+    retry.textContent = "Try again";
+    retry.addEventListener("click", loadFeed);
+    status.replaceChildren(`Couldn't load specials: ${err.message}. `, retry);
+  } finally {
+    feed.setAttribute("aria-busy", "false");
   }
 }
+
+// Sold-out posts go after the rest, as the server sends them; otherwise newest first.
+const shelfOrder = (list) => [...list].sort((a, b) => (a.stock === "gone") - (b.stock === "gone"));
 
 function replaceDeal(updated) {
   deals = deals.map((x) => (x.id === updated.id ? updated : x));
   renderFeed();
 }
-
-// Sold-out posts go after the rest, as the server sends them; otherwise newest first.
-const shelfOrder = (list) => [...list].sort((a, b) => (a.stock === "gone") - (b.stock === "gone"));
 
 function renderFeed() {
   deals = shelfOrder(deals);
@@ -200,33 +212,38 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".now", li).textContent = money(d.nowCents);
   $(".was", li).textContent = money(d.wasCents);
   $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
-  $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · posted by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
+  $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
 
   if (isMe(d.author) || isAdmin()) wireDelete(d, li);
+  if (!isMe(d.author)) $(".delete-start", li).textContent = "Delete post (admin)";
 
+  // a guest sees how much is left; only someone logged in gets the buttons to report it
   const group = $(".stock", li);
+  group.hidden = !me;
   group.setAttribute("aria-label", `How much ${d.item} is left`);
   for (const b of group.querySelectorAll("button")) {
     b.setAttribute("aria-pressed", String(b.dataset.stock === d.stock));
     b.addEventListener("click", () => updateStock(d, b.dataset.stock));
   }
-  $(".stock-by", li).textContent = `${STOCK_TEXT[d.stock]}, according to ${nameOf(d.stockBy)}, ${ago(d.stockAt)}`;
-  // earlier reports, so a sudden flip-flop is visible
-  $(".stock-history", li).textContent = d.stockHistory.length > 1
-    ? `Before that: ${d.stockHistory.slice(1).map((r) => `${STOCK_TEXT[r.stock]} (${nameOf(r.by)}, ${ago(r.at)})`).join("; ")}`
-    : "";
+  // who said so, and the two reports before, so a sudden flip-flop is visible
+  const earlier = d.stockHistory.slice(1, 3).map((r) => `${STOCK_TEXT[r.stock]} (${nameOf(r.by)}, ${ago(r.at)})`);
+  $(".stock-by", li).textContent =
+    // the pressed button already shows the level to someone logged in
+    (me ? `by ${nameOf(d.stockBy)}, ${ago(d.stockAt)}` : `Left: ${STOCK_TEXT[d.stock]} · ${nameOf(d.stockBy)}, ${ago(d.stockAt)}`) +
+    (earlier.length ? `. Before: ${earlier.join(", ")}` : "");
 
   // confirmations
   const confirmedByMe = d.confirmedBy.some(isMe);
   const others = d.confirmations - (confirmedByMe ? 1 : 0);
   const people = (k) => (k === 1 ? "1 other person" : `${k} other people`);
   $(".confirmed", li).textContent =
-    d.confirmations === 0 ? "Not confirmed by anyone else yet."
+    d.confirmations === 0 ? ""
     : confirmedByMe ? `✓ You confirmed this${others ? `, and so did ${people(others)}` : ""}.`
     : `✓ Confirmed by ${d.confirmations === 1 ? "1 person" : `${d.confirmations} people`} besides the poster.`;
   const confirm = $(".confirm", li);
-  confirm.hidden = isMe(d.author) || confirmedByMe;
+  confirm.hidden = !me || isMe(d.author) || confirmedByMe;
   confirm.addEventListener("click", () => confirmDeal(d.id));
+  $(".trust", li).hidden = d.confirmations === 0 && confirm.hidden;
 
   // what's been corrected
   $(".history", li).replaceChildren(
@@ -242,6 +259,7 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".pending", li).replaceChildren(...d.pending.map((p) => pendingItem(d, p)));
 
   const correct = $("details.correct", li);
+  correct.hidden = !me; // a guest still sees open and applied corrections above
   const form = $(".correct-form", li);
   const fit = () => fitCorrectionInput(form, d);
   form.elements.field.addEventListener("change", fit);
@@ -256,6 +274,10 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $("summary", details).textContent = d.comments === 1 ? "1 comment" : `${d.comments} comments`;
   details.addEventListener("toggle", () => details.open && loadComments(d.id, li));
   $(".comment-form", li).addEventListener("submit", (e) => postComment(e, d.id, li));
+  $(".comment-form", li).hidden = !me;
+  const loginToComment = $(".login-to-comment", li);
+  loginToComment.hidden = !!me;
+  loginToComment.addEventListener("click", () => requireLogin("comment"));
   if (commentsOpen) details.open = true;
   return li;
 }
@@ -310,7 +332,7 @@ function pendingItem(d, p) {
     `${others} of ${QUORUM} agree${mine ? " (including you)" : ""}.` +
     (p.notes.length ? ` “${p.notes.join("” “")}”` : "");
   item.append(text);
-  if (!mine) {
+  if (me && !mine) {
     const agree = document.createElement("button");
     agree.type = "button";
     agree.className = "quiet small";
@@ -441,21 +463,32 @@ function alertIn(container, message) {
 // --- account
 
 const authForm = $("#auth");
+const account = $("#account");
+const WHY = $("#auth-why").textContent;
 
 function showMe() {
-  $("#who").textContent = me
-    ? `Signed in as ${me.name}${isAdmin() ? " (admin)" : ""}.`
-    : "You're a guest: you can look, but to post or help correct you need to log in.";
+  $("#who").textContent = me ? `${me.name}${isAdmin() ? " (admin)" : ""}` : "";
   $("#show-login").hidden = !!me;
   $("#logout").hidden = !me;
-  if (me) authForm.hidden = true;
+  if (me) hideAuth();
+  // a guest's post button says what it takes, rather than opening a form they can't send
+  $("#post-toggle").textContent = me ? "+ Post a special" : "Log in to post a special";
 }
 
-function showAuth(message = "") {
-  authForm.hidden = false;
-  $("#auth-error").textContent = message;
+// `why` says what the visitor was trying to do when they were asked to log in
+function showAuth(why = "") {
+  account.hidden = false;
+  $("#show-login").setAttribute("aria-expanded", "true");
+  $("#auth-why").textContent = why ? `${why} Reading stays free.` : WHY;
+  $("#auth-error").textContent = "";
+  account.scrollIntoView({ block: "nearest" });
   authForm.elements.username.focus();
-  authForm.scrollIntoView({ block: "center" });
+}
+
+function hideAuth({ refocus = false } = {}) {
+  account.hidden = true;
+  $("#show-login").setAttribute("aria-expanded", "false");
+  if (refocus) $("#show-login").focus();
 }
 
 // The session cookie is shared by every tab, so another tab can log in or out
@@ -501,11 +534,9 @@ authForm.addEventListener("submit", (e) => {
   enter("/api/login");
 });
 $("#register-btn").addEventListener("click", () => enter("/api/register"));
-$("#auth-cancel").addEventListener("click", () => {
-  authForm.hidden = true;
-  $("#show-login").focus();
-});
-$("#show-login").addEventListener("click", () => showAuth());
+$("#auth-cancel").addEventListener("click", () => hideAuth({ refocus: true }));
+account.addEventListener("keydown", (e) => e.key === "Escape" && hideAuth({ refocus: true }));
+$("#show-login").addEventListener("click", () => (account.hidden ? showAuth() : hideAuth()));
 $("#logout").addEventListener("click", async () => {
   await api("/api/logout", {}).catch(() => {});
   me = null;
