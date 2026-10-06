@@ -586,15 +586,25 @@ function similarItem(m) {
   const li = document.createElement("li");
   li.className = "similar-item";
   const head = document.createElement("p");
-  head.innerHTML = "<strong></strong> <span class='hint'></span>";
-  head.firstChild.textContent = m.item;
-  head.lastChild.textContent = `posted by ${nameOf(m.author)}, ${ago(m.createdAt)}` +
+  const name = document.createElement("strong");
+  name.textContent = m.item;
+  const meta = document.createElement("span");
+  meta.className = "hint";
+  meta.textContent = `posted by ${nameOf(m.author)}, ${ago(m.createdAt)}` +
     (m.confirmations ? ` · confirmed by ${m.confirmations}` : "");
+  head.append(name, " ", meta);
   li.append(head);
 
   // yours against theirs, field by field
   const table = document.createElement("table");
-  table.innerHTML = "<thead><tr><th scope='col'></th><th scope='col'>Posted</th><th scope='col'>Yours</th></tr></thead><tbody></tbody>";
+  const headRow = table.createTHead().insertRow();
+  for (const text of ["", "Posted", "Yours"]) {
+    const th = document.createElement("th");
+    th.scope = "col";
+    th.textContent = text;
+    headRow.append(th);
+  }
+  table.createTBody();
   const differs = [];
   for (const field of FIELDS) {
     const same = sameValue(field, m[field], draft[field]);
