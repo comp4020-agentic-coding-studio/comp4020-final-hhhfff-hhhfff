@@ -23,3 +23,5 @@ mise.local.toml
 
 # the local SQLite database (the deployed one lives on the Fly volume)
 data/
+.localdata/
+.demodata/
