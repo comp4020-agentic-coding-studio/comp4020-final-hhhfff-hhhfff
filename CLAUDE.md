@@ -10,6 +10,8 @@ README, stop and say so rather than picking one.
 - Start: `PORT=8080 DATA_DIR=.localdata node server/server.ts`
 - `pnpm check` (typecheck + `spec/` tests against the running app, at
   `APP_URL`, default `http://localhost:8080`) must pass before any commit.
+- To run the admin test too, start the app with `ADMIN_USERS=spec-admin` and
+  run `SPEC_ADMIN_USER=spec-admin pnpm check`; without those it is skipped.
 - `pnpm check:evidence` must pass before a crit cutoff.
 - Node 24 runs the TypeScript directly; there is no build step. The only
   runtime dependency is `marked`. Don't add dependencies without asking.
@@ -22,18 +24,27 @@ README, stop and say so rather than picking one.
 - Show a "special" that isn't cheaper than the usual price. Enforce on the
   server, including when applied through a correction.
 - Allow two live posts for the same item at the same store.
-- Reveal anyone's secret key in any response, or let a public id stand in
-  for it. Only the poster may delete their post.
+- Reveal anyone's password, password hash or session token in any response,
+  or let a public id (the user id shown on posts) stand in for a session.
+- Let a guest (no valid session) change anything. Identity comes only from
+  the session cookie, never from the request body; permissions come from the
+  role table in `server/auth.ts` and are checked on the server, not just by
+  hiding buttons.
+- Let anyone but the poster, or an admin, delete a post. Roles are guest,
+  user and admin; admins come only from the `ADMIN_USERS` environment
+  variable, never from the API.
 - Trust client input. Everything goes through the validators in
   `server/server.ts`; SQL uses parameters only; user text is rendered with
   `textContent`, never `innerHTML`.
 - Count a poster's own vote, or one person's repeat votes, towards the
-  three-person correction quorum.
+  three-person correction quorum. One person is one account.
+- Let one account report a post's stock more than once a minute.
 - Lose data on restart or redeploy.
 
 ## What the pages must hold to
 
-- Specials come first on the page; the post form stays folded.
+- Specials come first on the page; the post form stays folded. A guest sees
+  the feed and a prompt to log in, and the write buttons ask them to.
 - Works at phone width (~400px) and desktop, with no horizontal scroll.
 - Prices are integer cents in storage, dollars in display. "Today" is
   Canberra's today.
@@ -50,6 +61,10 @@ README, stop and say so rather than picking one.
   has changed, and say why in the commit message.
 - When a correction comes from the user, record it here (or in `spec/`) so
   it isn't repeated; don't just retry until green.
+- Tests get an identity from `person()` in `spec/api.ts`, which registers a
+  real account. Don't put an identity in a request body; it is ignored.
+- Don't write Python for edits here: on this machine `python` is only the
+  Windows Store stub and silently does nothing. Use the Edit tool or node.
 
 ## Working style
 
