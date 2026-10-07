@@ -29,8 +29,8 @@ not the number of posts:
    person per post a minute, and recent reports stay visible.
 4. **Specials are cheaper, or they are not specials.** No post or
    correction can put a special at or above the usual price.
-5. **"Gone" arrives before the walk.** An open page shows anyone's change
-   within a moment, with no reload.
+5. **"Gone" arrives before the walk.** An open page shows changes to the
+   posts on it, and new posts on page one, within moments.
 
 Reading is free; writing needs an account. I first used a nickname and a
 browser-held key, since friction matters in an aisle. But the rules above
@@ -42,10 +42,10 @@ Only the poster, or an admin, can delete a post.
 
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 including simultaneous posts; the confirmation and three-person correction
-rules; poster-only delete; the price check; the stock-report limit; guests
-being read-only; logins across browsers; no password or session token
-leaking; search finding an item or shop despite a typo; and live updates
-reaching an open page.
+rules; poster-only delete; admins only from `ADMIN_USERS`; the price check;
+the stock-report limit; guests being read-only; logins across browsers; no
+password or session token leaking; typo-tolerant search; every live post
+reachable across pages; and live updates reaching an open page.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
@@ -54,17 +54,16 @@ it with strangers.
 
 ## Sources and what I left out
 
-- **The big chains' specials pages** cover only their own shops.
+- **The big chains' specials pages** cover only their own shops; the feed
+  only links to them.
 - **Xiaohongshu (RedNote).** Students share bargains there, but posts are
   scattered and rarely live.
 - **PetrolSpy**, where drivers report fuel prices for strangers, is the
   model for crowd-reported prices here.
-- **My friends** find cheap food by chance and pass it on in chat, by
-  luck.
+- **My friends** pass on cheap food in chat, found by luck.
 
 The shop list comes from OpenStreetMap. Each post records where the poster
-saw it (in store, website, catalogue or word of mouth), so readers can
-weigh it.
+saw it, so readers can weigh it.
 
 I chose not to build email login, password reset, receipt photos,
 price-history charts or website scraping: each adds friction or a claim
