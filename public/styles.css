@@ -7,9 +7,9 @@
   --card: #fff;
   --field: #fff;
   --line: #e2dccd;
-  --soft: var(--soft); /* a quiet panel inside a card */
-  --tint: var(--tint); /* the yellow of a markdown sticker, and of search marks */
-  --tint-line: var(--tint-line);
+  --soft: #f3efe4; /* a quiet panel inside a card */
+  --tint: #fff2c2; /* the yellow of a markdown sticker, and of search marks */
+  --tint-line: #e6cf7a;
   --accent: #c8102e; /* the red behind white text: header, main buttons */
   --accent-ink: #fff;
   --accent-text: #c8102e; /* the red as text on the page: prices, errors */
