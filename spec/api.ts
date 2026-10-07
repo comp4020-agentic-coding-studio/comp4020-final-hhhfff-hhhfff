@@ -49,6 +49,21 @@ export async function call(
   return { status: res.status, data: await res.json() };
 }
 
+// The whole feed at `path` (e.g. "/api/deals?store=coles-civic"), every page
+// of it: the server sends a page at a time, each after the last deal of the
+// one before, and an empty page is past the end.
+export async function wholeFeed(path: string): Promise<any[]> {
+  const all: any[] = [];
+  for (;;) {
+    const url = new URL(path, baseUrl);
+    if (all.length) url.searchParams.set("after", String(all.at(-1).id));
+    const res = await call(url.pathname + url.search);
+    if (res.status !== 200) throw new Error(`reading ${url}: ${res.status} ${JSON.stringify(res.data)}`);
+    if (!res.data.length) return all;
+    all.push(...res.data);
+  }
+}
+
 // A unique item name, so tests never collide with each other or with real posts.
 export const uniqueItem = (label = "spec item") => `${label} ${randomUUID().slice(0, 8)}`;
 

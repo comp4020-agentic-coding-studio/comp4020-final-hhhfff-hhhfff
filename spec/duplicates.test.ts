@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call, person, special, uniqueItem, writes } from "./api.ts";
+import { call, person, special, uniqueItem, wholeFeed, writes } from "./api.ts";
 
 // One special, one post: nobody can post an item at a store where it already
 // has a live post, a poster is shown what's already there before posting, and
@@ -16,7 +16,7 @@ describe.skipIf(!writes)("one live post per item per store", () => {
     expect(again.status).toBe(409);
     expect(again.data.existing.id).toBe(first.data.id);
 
-    const feed = (await call("/api/deals?store=coles-civic")).data;
+    const feed = await wholeFeed("/api/deals?store=coles-civic");
     expect(feed.filter((d: any) => d.author.id === me.public.id)).toHaveLength(1);
   });
 
@@ -43,7 +43,7 @@ describe.skipIf(!writes)("one live post per item per store", () => {
     expect(results.filter((r) => r.status === 409).map((r) => r.data.existing.id)).toEqual(
       Array(4).fill(created[0].data.id),
     );
-    const feed = (await call("/api/deals?store=coles-civic")).data;
+    const feed = await wholeFeed("/api/deals?store=coles-civic");
     expect(feed.filter((d: any) => d.item === item)).toHaveLength(1);
   });
 

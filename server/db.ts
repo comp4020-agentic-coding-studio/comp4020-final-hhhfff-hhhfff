@@ -326,34 +326,44 @@ function toDeal(r: Row): Deal {
 // running (not ended) and not deleted; takes today's date as its parameter
 const active = `(d.ends_on IS NULL OR d.ends_on >= ?) AND d.deleted_at IS NULL`;
 
-// Deals that ended before `sinceEndsOn` (a YYYY-MM-DD date) drop out of the
-// feed; they stay in the database.
-export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
-  const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
-  const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
-  // newest first, but sold-out posts after everything still on the shelf
-  const rows = db
-    .prepare(`${selectDeals} ${where} ORDER BY s.stock = 'gone', d.created_at DESC LIMIT 200`)
-    .all(...args);
-  return rows.map((r) => toDeal(r as Row));
+// What the feed is ordered by, for one deal. Cheap enough to read for every
+// active deal, so the server sorts (and, for a search, scores) them all and
+// then loads only one page in full.
+export interface DealKey {
+  id: number;
+  storeId: string;
+  item: string;
+  createdAt: string;
+  gone: boolean;
 }
 
-// Every active deal's id, store and item, in feed order, for search to score
-// before loading the few that match in full.
-export function searchableDeals(
-  storeId: string | null,
-  sinceEndsOn: string,
-): { id: number; storeId: string; item: string; gone: boolean }[] {
+const selectKeys = `
+  SELECT d.id, d.store_id, d.item, d.created_at, s.stock = 'gone' AS gone
+  FROM deals d
+  JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
+`;
+
+const toKey = (r: Row): DealKey => ({
+  id: r.id as number,
+  storeId: r.store_id as string,
+  item: r.item as string,
+  createdAt: r.created_at as string,
+  gone: !!r.gone,
+});
+
+// Deals that ended before `sinceEndsOn` (a YYYY-MM-DD date) drop out of the
+// feed; they stay in the database.
+export function activeDealKeys(storeId: string | null, sinceEndsOn: string): DealKey[] {
   const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
   const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
-  const rows = db
-    .prepare(
-      `SELECT d.id, d.store_id, d.item, s.stock = 'gone' AS gone FROM deals d
-       JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
-       ${where} ORDER BY s.stock = 'gone', d.created_at DESC`,
-    )
-    .all(...args) as Row[];
-  return rows.map((r) => ({ id: r.id as number, storeId: r.store_id as string, item: r.item as string, gone: !!r.gone }));
+  return (db.prepare(`${selectKeys} ${where}`).all(...args) as Row[]).map(toKey);
+}
+
+// One deal's key, even if it has since ended or been deleted: a page that
+// ended on it carries on from where it would be.
+export function dealKey(id: number): DealKey | null {
+  const row = db.prepare(`${selectKeys} WHERE d.id = ?`).get(id) as Row | undefined;
+  return row ? toKey(row) : null;
 }
 
 // A deleted deal reads as missing, so nothing can be done to it either.

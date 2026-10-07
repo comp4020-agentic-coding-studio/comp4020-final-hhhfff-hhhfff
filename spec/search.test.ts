@@ -5,8 +5,11 @@ import { call, person, special, writes } from "./api.ts";
 // Search runs on the server (/api/deals?q=), so it finds posts past the feed's
 // first 200. Every word must match the item or the shop (name, suburb or kind:
 // "asian" finds the Asian grocers); a word can be whole, the start of one,
-// inside one (Chinese has no spaces) or a letter off. Closer matches come
-// first, sold-out posts still last. Anyone can search; it changes nothing.
+// with an ending ("dumplings" for "dumpling"), run across a space, anywhere in
+// Chinese (no spaces), or, in a longer word, a letter off. A slip is only a
+// fallback, and a short word never slips: "cola" isn't "Coles". Closer
+// matches come first, sold-out posts still last. Anyone can search; it
+// changes nothing.
 
 // One made-up word, letters only, ties each search to this file's posts
 // whatever else is in the feed.
@@ -32,6 +35,10 @@ describe.skipIf(!writes)("searching the specials", async () => {
   const oatMilk = await post("Oat Milk 1L", "coles-civic");
   const wrappers = await post("Dumpling wrappers", "aldi-civic");
   const jiaozi = await post("饺子", "swan-dickson");
+  const coke = await post("Coca-Cola 1.25L", "aldi-civic");
+  const chocolate = await post("Chocolate block", "aldi-civic");
+  const bread = await post("Bread rolls", "aldi-civic");
+  const beans = await post("Broad beans", "aldi-civic");
   // someone else: posting counts as the poster's stock report for the minute
   const shopper = await person("spec shopper");
   expect((await call(`/api/deals/${oatMilk}/stock`, { stock: "gone", author: shopper.as })).status).toBe(200);
@@ -44,7 +51,18 @@ describe.skipIf(!writes)("searching the specials", async () => {
 
   it("still finds it with a letter wrong or missing", async () => {
     expect(await search(`dumplngs ${tag}`)).toContain(dumplings);
-    expect(await search(`tim tems ${tag}`)).toEqual([timTams]);
+    expect(await search(`tim tamms ${tag}`)).toEqual([timTams]);
+  });
+
+  it("doesn't stretch a short word to a shop or into the middle of another word", async () => {
+    // "cola" once found every Coles post (a letter off "cole") and "chocolate"
+    expect(await search(`cola ${tag}`)).toEqual([coke]);
+    expect(await search(`choc ${tag}`)).toEqual([chocolate]);
+  });
+
+  it("shows near-miss spellings only when nothing matches as typed", async () => {
+    expect(await search(`bread ${tag}`)).toEqual([bread]);
+    expect(new Set(await search(`broaf ${tag}`))).toEqual(new Set([beans]));
   });
 
   it("needs every word to match, in the item or the shop's name, suburb or kind", async () => {

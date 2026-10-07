@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call, person, special, writes } from "./api.ts";
+import { call, person, special, wholeFeed, writes } from "./api.ts";
 
 // A poster can take their own post down, even after others have added to it;
 // nobody else can. A deleted post is gone from everything people can see or
@@ -34,8 +34,8 @@ describe.skipIf(!writes)("deleting a post", () => {
     const { data: deal } = await call("/api/deals", special(poster));
     await remove(deal.id, poster);
 
-    expect((await call("/api/deals")).data.some((d: any) => d.id === deal.id)).toBe(false);
-    expect((await call("/api/deals?store=coles-civic")).data.some((d: any) => d.id === deal.id)).toBe(false);
+    expect((await wholeFeed("/api/deals")).some((d: any) => d.id === deal.id)).toBe(false);
+    expect((await wholeFeed("/api/deals?store=coles-civic")).some((d: any) => d.id === deal.id)).toBe(false);
     const similar = await call(`/api/deals/similar?store=coles-civic&item=${encodeURIComponent(deal.item)}`);
     expect(similar.data.some((d: any) => d.id === deal.id)).toBe(false);
 

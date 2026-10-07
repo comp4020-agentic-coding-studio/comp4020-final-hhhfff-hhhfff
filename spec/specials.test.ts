@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { call, person, special, writes } from "./api.ts";
+import { call, person, special, wholeFeed, writes } from "./api.ts";
 
 // Crit 8's "it's alive": a stranger can do the core thing (post a special,
 // report stock, comment) and find their trace still there when they come back.
@@ -54,7 +54,7 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     const { data: older } = await call("/api/deals", special(poster));
     const { data: newer } = await call("/api/deals", special(poster));
     const order = async () =>
-      (await call("/api/deals?store=coles-civic")).data.map((d: any) => d.id).filter((id: number) => id === older.id || id === newer.id);
+      (await wholeFeed("/api/deals?store=coles-civic")).map((d: any) => d.id).filter((id: number) => id === older.id || id === newer.id);
 
     expect(await order()).toEqual([newer.id, older.id]);
     await call(`/api/deals/${newer.id}/stock`, { stock: "gone", author: passerby.as });
@@ -69,7 +69,7 @@ describe.skipIf(!writes)("a stranger's trace is still there when they come back"
     const item = `spec not-a-deal ${crypto.randomUUID().slice(0, 8)}`;
     const res = await call("/api/deals", special(poster, { item, wasCents: 200, nowCents: 300 }));
     expect(res.status).toBe(400);
-    expect((await call("/api/deals")).data.some((d: any) => d.item === item)).toBe(false);
+    expect((await wholeFeed("/api/deals")).some((d: any) => d.item === item)).toBe(false);
   });
 
   it("no password, hash or session token ever appears in what the server sends back", async () => {

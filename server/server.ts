@@ -6,21 +6,21 @@ import { broadcast, listen, tell } from "./events.ts";
 import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
 import {
   accountByName,
+  activeDealKeys,
   addComment,
   confirmDeal,
   CORRECTABLE,
   createDeal,
   createUser,
+  dealKey,
   deleteDeal,
   endSession,
   fieldValue,
   getDeal,
   listComments,
-  listDeals,
   liveDuplicate,
   proposeCorrection,
   reportStock,
-  searchableDeals,
   setAdmins,
   similarDeals,
   SOURCES,
@@ -31,6 +31,7 @@ import {
   userForToken,
   type Author,
   type Deal,
+  type DealKey,
   type Field,
   type Source,
   type Stock,
@@ -81,10 +82,14 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
   return v as T;
 }
 
-// --- search. Every active deal's item and store are scored, cheaply; only
-// the best (up to the feed's 200) are loaded in full. Sold-out posts still go
-// after the rest, then closer matches first, then newest.
+// --- the feed and search. Every active deal's sort key (and, for a search,
+// its item and store) is read and ordered, cheaply; only one page is loaded in
+// full. Order: sold-out posts after the rest, then closer matches (for a
+// search), then newest, then id. A page carries on after the last deal the
+// reader has (`after`), so posts arriving or leaving meanwhile neither repeat
+// nor skip one.
 
+const FEED_PAGE = 100;
 const SEARCH_MAX = 80;
 const KIND_WORDS: Record<Store["kind"], string> = {
   supermarket: "supermarket",
@@ -93,15 +98,38 @@ const KIND_WORDS: Record<Store["kind"], string> = {
 };
 const storeText = (s: Store | undefined) => (s ? `${s.name} ${s.where} ${KIND_WORDS[s.kind]}` : "");
 
-function searchDeals(query: string, store: string | null) {
-  const terms = searchTerms(query);
-  if (!terms.length) return [];
-  return searchableDeals(store, todayInCanberra())
-    .map((d) => ({ ...d, score: searchScore(terms, d.item, storeText(storeById.get(d.storeId))) }))
-    .filter((d) => d.score > 0)
-    .sort((a, b) => Number(a.gone) - Number(b.gone) || b.score - a.score)
-    .slice(0, 200)
-    .map((d) => getDeal(d.id)!);
+type Ranked = DealKey & { score: number; typo: boolean };
+const rank = (d: DealKey, terms: string[] | null): Ranked =>
+  terms ? { ...d, ...searchScore(terms, d.item, storeText(storeById.get(d.storeId))) } : { ...d, score: 0, typo: false };
+// negative when a comes first in the feed
+const feedOrder = (a: Ranked, b: Ranked) =>
+  Number(a.gone) - Number(b.gone) || b.score - a.score || b.createdAt.localeCompare(a.createdAt) || b.id - a.id;
+
+// the deal a page carries on after; absent means the first page
+function afterId(v: string | null): number | null {
+  if (v === null) return null;
+  if (!/^[1-9]\d{0,9}$/.test(v)) throw new HttpError(400, "after must be a deal id");
+  return Number(v);
+}
+
+function feedPage(store: string | null, query: string | null, after: number | null) {
+  const terms = query === null ? null : searchTerms(query);
+  if (terms && !terms.length) return [];
+  let found = activeDealKeys(store, todayInCanberra()).map((d) => rank(d, terms));
+  if (terms) {
+    found = found.filter((d) => d.score > 0);
+    // a near-miss spelling is a fallback: shown only when nothing matches as typed
+    const exact = found.filter((d) => !d.typo);
+    if (exact.length) found = exact;
+  }
+  found.sort(feedOrder);
+  if (after !== null) {
+    const last = dealKey(after);
+    if (!last) throw new HttpError(400, "after must be a deal id");
+    const mark = rank(last, terms);
+    found = found.filter((d) => feedOrder(mark, d) < 0);
+  }
+  return found.slice(0, FEED_PAGE).map((d) => getDeal(d.id)!);
 }
 
 // --- accounts. Who you are comes only from the session cookie, never from the
@@ -333,9 +361,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === "GET" && path === "/api/deals") {
     const store = url.searchParams.get("store");
     if (store && !storeById.has(store)) throw new HttpError(404, "no such store");
+    const after = afterId(url.searchParams.get("after"));
     const q = url.searchParams.get("q")?.trim();
-    if (q) return send(res, 200, searchDeals(str(q, "search", 1, SEARCH_MAX), store));
-    return send(res, 200, listDeals(store, todayInCanberra()));
+    return send(res, 200, feedPage(store, q ? str(q, "search", 1, SEARCH_MAX) : null, after));
   }
 
   if (method === "POST" && path === "/api/deals") {

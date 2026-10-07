@@ -69,36 +69,49 @@ function editDistance(a: string, b: string, max: number): number {
   return prev[b.length];
 }
 
-// How well one search word matches a normalised text: a whole word, the start
-// of one ("dump" while typing "dumplings"), inside one or across a space
-// (Chinese has no spaces; "timtams"), or a slip of a letter or two in a longer
-// word ("dumplngs"). 0 if none.
+// How well one search word matches a normalised text, best first: a whole
+// word; the start of one ("dump" while typing "dumplings"); the word with an
+// ending ("dumplings" for "dumpling"); a run from the
+// start of a word across a space ("timtams"); in Chinese and other scripts
+// written without spaces, anywhere; or, for a word of five letters or more, a
+// slip of a letter (two from eight letters: "dumplngs"). Only from the start of
+// a word, so "cola" doesn't find "chocolate", and never a slip in a short word,
+// so "cola" doesn't find "Coles". 0 if none; TYPO marks the slip.
+const TYPO = 1;
 function termScore(term: string, key: string): number {
   const words = key.split(" ");
   if (words.includes(term)) return 3;
   if (words.some((w) => w.startsWith(term))) return 2;
-  // a short Latin fragment ("a", "ti") would match nearly everything
-  const inside = term.length >= 3 || /[^\p{Script=Latin}\p{N}.]/u.test(term);
-  if (inside && key.replace(/ /g, "").includes(term)) return 1.5;
-  if (term.length >= 4 && !/\d/.test(term)) {
-    const max = term.length >= 7 ? 2 : 1;
+  // a plural or other ending on a word of the item: "dumplings" finds "dumpling", "tomatoes" "tomato"
+  if (words.some((w) => w.length >= 3 && term.startsWith(w) && term.length - w.length <= 2)) return 1.8;
+  if (/[^\p{Script=Latin}\p{N}.]/u.test(term)) {
+    if (key.replace(/ /g, "").includes(term)) return 1.5;
+  } else if (words.some((_, i) => words.slice(i).join("").startsWith(term))) return 1.5;
+  if (term.length >= 5 && !/\d/.test(term)) {
+    const max = term.length >= 8 ? 2 : 1;
     const near = (w: string) =>
-      editDistance(term, w, max) <= max || (w.length > term.length && editDistance(term, w.slice(0, term.length), max) <= max);
-    if (words.some(near)) return 1;
+      editDistance(term, w, max) <= max || (w.length > term.length && editDistance(term, w.slice(0, term.length), 1) <= 1);
+    if (words.some(near)) return TYPO;
   }
   return 0;
 }
 
-// 0 unless every search word matches the item or the store; otherwise higher
-// for closer matches, and an item match counts a little more than a store one.
-export function searchScore(terms: string[], item: string, store: string): number {
+// score 0 unless every search word matches the item or the store; otherwise
+// higher for closer matches, and an item match counts a little more than a
+// store one. `typo` says some word only matched as a slip, so the caller can
+// leave such matches out when others need no such charity.
+export function searchScore(terms: string[], item: string, store: string): { score: number; typo: boolean } {
   const itemK = itemKey(item);
   const storeK = itemKey(store);
-  let total = 0;
+  let score = 0;
+  let typo = false;
   for (const t of terms) {
-    const s = Math.max(termScore(t, itemK), 0.9 * termScore(t, storeK));
-    if (!s) return 0;
-    total += s;
+    const inItem = termScore(t, itemK);
+    const inStore = termScore(t, storeK);
+    const best = Math.max(inItem, 0.9 * inStore);
+    if (!best) return { score: 0, typo: false };
+    if (Math.max(inItem, inStore) === TYPO) typo = true;
+    score += best;
   }
-  return total;
+  return { score, typo };
 }
