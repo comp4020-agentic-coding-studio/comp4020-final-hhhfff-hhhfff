@@ -8,10 +8,15 @@ README, stop and say so rather than picking one.
 ## Run and check
 
 - Start: `PORT=8080 DATA_DIR=.localdata node server/server.ts`
-- `pnpm check` (typecheck + `spec/` tests against the running app, at
-  `APP_URL`, default `http://localhost:8080`) must pass before any commit.
-- To run the admin test too, start the app with `ADMIN_USERS=spec-admin` and
-  run `SPEC_ADMIN_USER=spec-admin pnpm check`; without those it is skipped.
+- `pnpm check` (typecheck + `spec/` tests over HTTP) must pass before any
+  commit. With no `APP_URL` it starts its own app on a throwaway data
+  directory (with `ADMIN_USERS=spec-admin`, so the admin test runs) and
+  removes it after; you don't need the app running. Tests must never write
+  into `.localdata`, the data the user browses: don't point `APP_URL` at the
+  app on 8080 (a correction from the user, after test posts piled up there).
+- With `APP_URL` set (CI sets it to the Docker image), the tests run against
+  that app instead; the admin test runs only if `SPEC_ADMIN_USER` names an
+  admin it was started with.
 - `pnpm check:evidence` must pass before a crit cutoff.
 - Node 24 runs the TypeScript directly; there is no build step. The only
   runtime dependency is `marked`. Don't add dependencies without asking.

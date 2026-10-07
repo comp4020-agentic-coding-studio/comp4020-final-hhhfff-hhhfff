@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, inject, it } from "vitest";
 import { baseUrl, call, person, special, writes } from "./api.ts";
 
 // Accounts and roles. A guest (no session) can only read; a signed-in user can
@@ -124,8 +124,10 @@ describe.skipIf(!writes)("roles", () => {
     expect((await call(`/api/deals/${deal.id}/delete`, { author: (await person("spec other")).as })).status).toBe(403);
   });
 
-  // Needs the app started with ADMIN_USERS=<that name> (see README); skipped otherwise.
-  const admin = process.env.SPEC_ADMIN_USER;
+  // Needs an app started with that name in ADMIN_USERS: the throwaway one the
+  // global setup starts always is; for one at APP_URL, say so in
+  // SPEC_ADMIN_USER. Skipped otherwise.
+  const admin = inject("adminUser");
   it.skipIf(!admin)("an admin can delete anyone's post, and a user can't become one by asking", async () => {
     const res = await post("/api/register", { username: admin, password: PASSWORD });
     const cookie = res.status === 201 ? cookieOf(res) : cookieOf(await post("/api/login", { username: admin, password: PASSWORD }));

@@ -17,9 +17,10 @@ contract.
 
 Both run against the **running** app over HTTP, so they hold whatever it's built
 with. In CI that app is the image your `Dockerfile` builds, started with a
-throwaway `/data`, and a red run blocks the deploy. Locally, start the app
-however you run it and `pnpm check` finds it at `APP_URL` (default
-`http://localhost:8080`). Keep them; don't delete them.
+throwaway `/data`, and a red run blocks the deploy. Locally, `pnpm check`
+starts the app itself on a throwaway data directory and removes it after, so
+test posts never reach the data you browse; set `APP_URL` to test an app you
+started instead. Keep them; don't delete them.
 
 ## Your checks
 

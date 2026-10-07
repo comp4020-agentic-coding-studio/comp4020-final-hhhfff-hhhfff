@@ -1,9 +1,8 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, expect, it } from "vitest";
+import { type App, launch } from "./launch.ts";
 
 // Admins are exactly the accounts named in ADMIN_USERS when the app starts:
 // a name taken off the list loses the role at the next start, sessions and
@@ -13,45 +12,17 @@ import { afterAll, expect, it } from "vitest";
 // restarts it with a different list, and checks everything over HTTP.
 
 const dataDir = mkdtempSync(join(tmpdir(), "spec-admins-"));
-let app: ChildProcess | undefined;
+let app: App | undefined;
 let url = "";
 
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const s = createServer().listen(0, () => {
-      const { port } = s.address() as { port: number };
-      s.close(() => resolve(port));
-    });
-  });
-
 async function start(adminUsers: string | undefined) {
-  await stop();
-  const port = await freePort();
-  url = `http://127.0.0.1:${port}`;
-  const env: NodeJS.ProcessEnv = { ...process.env, PORT: String(port), DATA_DIR: dataDir };
-  delete env.ADMIN_USERS;
-  if (adminUsers !== undefined) env.ADMIN_USERS = adminUsers;
-  app = spawn(process.execPath, ["server/server.ts"], { env, stdio: "ignore" });
-  for (let i = 0; i < 100; i++) {
-    try {
-      await fetch(url);
-      return;
-    } catch {
-      await new Promise((r) => setTimeout(r, 100));
-    }
-  }
-  throw new Error("the app didn't start");
-}
-
-async function stop() {
-  if (!app || app.exitCode !== null) return;
-  const exited = new Promise((r) => app!.once("exit", r));
-  app.kill();
-  await exited;
+  await app?.stop();
+  app = await launch({ DATA_DIR: dataDir, ADMIN_USERS: adminUsers });
+  url = app.url;
 }
 
 afterAll(async () => {
-  await stop();
+  await app?.stop();
   rmSync(dataDir, { recursive: true, force: true });
 });
 
