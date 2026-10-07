@@ -215,8 +215,8 @@
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
         <p class="meta"></p>
-        <!-- how much is left: a bar filled from the left like a battery; the
-             three levels report it, sold out sits apart -->
+        <!-- how much is left: three levels, only the reported one lit; pressing
+             one reports it, sold out sits apart -->
         <div class="stock" role="group">
           <span class="stock-label">Left:</span>
           <span class="meter">
@@ -226,7 +226,7 @@
           </span>
           <button type="button" data-stock="gone" class="gone">Sold out</button>
         </div>
-        <!-- a guest's read-only version: the same bar, no buttons to be refused -->
+        <!-- a guest's read-only version: the same three cells, no buttons to be refused -->
         <p class="stock-read" hidden>
           <span class="stock-label">Left:</span>
           <span class="meter static" aria-hidden="true"><i></i><i></i><i></i></span>
