@@ -477,10 +477,15 @@ export function accountByName(username: string): Account | null {
   return r ? toAccount(r) : null;
 }
 
-// Admins come from the ADMIN_USERS environment variable, not from the API.
+// Admins come from the ADMIN_USERS environment variable, not from the API:
+// exactly those named are admins, so a name taken off the list loses the role
+// at the next start, sessions and all (a session reads the role each time).
 export function setAdmins(usernames: string[]): void {
-  const promote = db.prepare(`UPDATE users SET role = 'admin' WHERE username = ?`);
-  for (const u of usernames) promote.run(u);
+  tx(() => {
+    db.prepare(`UPDATE users SET role = 'user' WHERE role = 'admin'`).run();
+    const promote = db.prepare(`UPDATE users SET role = 'admin' WHERE username = ?`);
+    for (const u of usernames) promote.run(u);
+  });
 }
 
 export function startSession(user: User, token: string, days: number): void {

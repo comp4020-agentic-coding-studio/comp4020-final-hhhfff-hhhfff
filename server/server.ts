@@ -160,8 +160,10 @@ function feedPage(store: string | null, query: string | null, slice: Slice): { d
 const USERNAME = /^[A-Za-z0-9_-]{3,24}$/;
 const COOKIE = "sid";
 
-// Admins are named in ADMIN_USERS (comma separated) and promoted at startup.
-setAdmins((process.env.ADMIN_USERS ?? "").split(",").map((u) => u.trim()).filter(Boolean));
+// Admins are named in ADMIN_USERS (comma separated). At startup exactly those
+// accounts become admins and any other admin goes back to being a user.
+const ADMINS = new Set((process.env.ADMIN_USERS ?? "").split(",").map((u) => u.trim()).filter(Boolean));
+setAdmins([...ADMINS]);
 
 function tokenOf(req: IncomingMessage): string | null {
   for (const part of (req.headers.cookie ?? "").split(";")) {
@@ -350,10 +352,9 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     let user: User | null;
     if (path === "/api/register") {
       const { salt, hash } = await hashPassword(pw);
-      user = createUser(username, salt, hash, "user");
+      // a name on ADMIN_USERS that registers after startup is an admin from the start
+      user = createUser(username, salt, hash, ADMINS.has(username) ? "admin" : "user");
       if (!user) throw new HttpError(409, "that username is taken");
-      if (process.env.ADMIN_USERS) setAdmins(process.env.ADMIN_USERS.split(",").map((u) => u.trim()).filter(Boolean));
-      user = accountByName(username);
     } else {
       if (loginBlocked(username)) throw new HttpError(429, "too many wrong passwords, wait a minute");
       const account = accountByName(username);
