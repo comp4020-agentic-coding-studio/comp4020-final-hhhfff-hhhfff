@@ -25,3 +25,6 @@ mise.local.toml
 data/
 .localdata/
 .demodata/
+
+# raw OpenStreetMap answers for scripts/streets.ts; the built map is public/streets.json
+.osm-cache/
