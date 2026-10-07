@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
+import { gzipSync } from "node:zlib";
 import { marked } from "marked";
 import { broadcast, listen, tell } from "./events.ts";
 import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
@@ -319,9 +320,24 @@ const TYPES: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
   ".ico": "image/x-icon",
+  ".json": "application/json; charset=utf-8",
 };
 
-async function sendFile(res: ServerResponse, root: string, rel: string): Promise<void> {
+// Text files go out gzipped to a browser that accepts it: the page's script
+// and the map's street data shrink to about a quarter. Each file's gzip is
+// kept until the file changes, so it is worked out once, not per request.
+const COMPRESSIBLE = new Set([".html", ".css", ".js", ".svg", ".json"]);
+const gzipped = new Map<string, { raw: Buffer; gz: Buffer }>();
+
+function gzipOf(path: string, data: Buffer): Buffer {
+  const kept = gzipped.get(path);
+  if (kept?.raw.equals(data)) return kept.gz;
+  const gz = gzipSync(data);
+  gzipped.set(path, { raw: data, gz });
+  return gz;
+}
+
+async function sendFile(req: IncomingMessage, res: ServerResponse, root: string, rel: string): Promise<void> {
   const path = normalize(join(root, rel));
   if (!path.startsWith(normalize(root))) throw new HttpError(404, "not found");
   let data: Buffer;
@@ -330,8 +346,14 @@ async function sendFile(res: ServerResponse, root: string, rel: string): Promise
   } catch {
     throw new HttpError(404, "not found");
   }
-  res.writeHead(200, { "content-type": TYPES[extname(path)] ?? "application/octet-stream" });
-  res.end(data);
+  const type = TYPES[extname(path)] ?? "application/octet-stream";
+  if (!COMPRESSIBLE.has(extname(path))) {
+    res.writeHead(200, { "content-type": type });
+    return void res.end(data);
+  }
+  const accepts = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
+  res.writeHead(200, { "content-type": type, vary: "accept-encoding", ...(accepts ? { "content-encoding": "gzip" } : {}) });
+  res.end(accepts ? gzipOf(path, data) : data);
 }
 
 // README.md is read per request, so a local edit shows without a restart.
@@ -565,8 +587,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return void res.end();
   }
   if (path === "/readme/") return sendReadme(res);
-  if (path.startsWith("/readme/docs/")) return sendFile(res, "docs", path.slice("/readme/docs/".length));
-  return sendFile(res, "public", path === "/" ? "index.html" : path.slice(1));
+  if (path.startsWith("/readme/docs/")) return sendFile(req, res, "docs", path.slice("/readme/docs/".length));
+  return sendFile(req, res, "public", path === "/" ? "index.html" : path.slice(1));
 }
 
 const server = createServer((req, res) => {
