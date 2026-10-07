@@ -438,7 +438,14 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   paintNames(li, d, store);
   $(".now", li).textContent = money(d.nowCents);
   $(".was", li).textContent = money(d.wasCents);
-  $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
+  // the sticker: "50%" over "off", louder the deeper the cut
+  const pct = Math.round((1 - d.nowCents / d.wasCents) * 100);
+  const [num, word] = [document.createElement("b"), document.createElement("small")];
+  num.textContent = `${pct}%`;
+  word.textContent = "off";
+  const off = $(".off", li);
+  off.replaceChildren(num, " ", word);
+  off.dataset.depth = pct >= 50 ? "huge" : pct >= 35 ? "big" : pct >= 20 ? "mid" : "small";
   $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
 
   if (isMe(d.author) || isAdmin()) wireDelete(d, li);

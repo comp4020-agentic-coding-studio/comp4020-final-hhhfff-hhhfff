@@ -17,6 +17,9 @@
   --button-ink: #fff;
   --good: #1f7a3d;
   --focus: #1a5fd0;
+  --ticket: #ffd84d; /* the shelf ticket stays yellow in dark mode too */
+  --ticket-ink: #3b3000;
+  --ticket-price: #b00d29;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: var(--paper);
@@ -40,6 +43,7 @@
     --button-ink: #15130f;
     --good: #2f9b55;
     --focus: #7aa7ff;
+    --ticket: #f0c843;
   }
 }
 
@@ -566,26 +570,103 @@ button.small {
   font-size: 0.9rem;
 }
 
+/* The price is a shelf ticket: the yellow markdown tag students know from
+   the shops, hung by a hole on the left, with the cut as a sticker on it. */
 .prices {
-  margin: 0.4rem 0;
+  justify-self: start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.55rem;
+  position: relative;
+  margin: 0.55rem 0;
+  padding: 0.2rem 0.6rem 0.2rem 1.35rem;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+  border-radius: 4px 12px 12px 4px;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.1), 0 3px 8px rgb(0 0 0 / 0.1);
   font-variant-numeric: tabular-nums;
 }
 
+.prices::before {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -0.21rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
 .prices .now {
-  font-size: 1.5rem;
-  color: var(--accent-text);
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ticket-price);
 }
 
 .prices .was {
-  color: var(--muted);
+  color: var(--ticket-ink);
+  opacity: 0.7;
 }
 
+/* the sticker: a quiet dashed one for a small cut, then orange, red, and a
+   red starburst from half off */
 .prices .off {
-  display: inline-block;
-  background: var(--tint);
-  border-radius: 4px;
-  padding: 0 0.35rem;
-  font-weight: 600;
+  display: inline-grid;
+  place-content: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  margin: -0.55rem 0 -0.55rem 0.1rem;
+  border-radius: 50%;
+  rotate: -10deg;
+  line-height: 1;
+  text-align: center;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.25);
+}
+
+.prices .off b {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.prices .off small {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.off[data-depth="small"] {
+  background: #fffdf4;
+  color: #6b5200;
+  border: 2px dashed #c99a00;
+  box-shadow: none;
+}
+
+.off[data-depth="mid"] {
+  background: #ff9a1f;
+  color: #3a1d00;
+}
+
+.off[data-depth="big"] {
+  background: #e3122f;
+  color: #fff;
+}
+
+.off[data-depth="huge"] {
+  width: 3.6rem;
+  height: 3.6rem;
+  margin-block: -0.8rem;
+  border-radius: 0;
+  background: #d0102b;
+  color: #fff;
+  box-shadow: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
+  clip-path: polygon(50% 0%, 61% 13%, 77% 7%, 79% 23%, 95% 25%, 89% 40%, 100% 50%, 89% 60%, 95% 75%, 79% 77%, 77% 93%, 61% 87%, 50% 100%, 39% 87%, 23% 93%, 21% 77%, 5% 75%, 11% 60%, 0% 50%, 11% 40%, 5% 25%, 21% 23%, 23% 7%, 39% 13%);
 }
 
 .meta {
@@ -630,22 +711,36 @@ button.small {
   font-size: 0.85rem;
 }
 
-.sold-out .prices,
+.deal {
+  position: relative;
+}
+
+.sold-out .prices {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
 .sold-out h3 {
   opacity: 0.55;
 }
 
-/* sold out says so up front, not only in the faded price */
-.sold-out .deal-head::after {
+/* sold out is stamped across the ticket, not only shown by the faded price */
+.sold-out::after {
   content: "Sold out";
-  align-self: start;
-  order: -1;
-  flex-basis: 100%;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  position: absolute;
+  top: 3.6rem;
+  right: 1rem;
+  padding: 0.15rem 0.6rem;
+  border: 3px solid var(--accent-text);
+  border-radius: 6px;
+  color: var(--accent-text);
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  rotate: -12deg;
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 .login-to-comment {
