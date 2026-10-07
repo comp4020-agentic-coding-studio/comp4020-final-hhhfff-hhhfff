@@ -1233,16 +1233,23 @@ button.danger {
   --u: 1;
   display: block;
   width: 100%;
-  height: min(62vh, 26rem);
+  /* short on a phone, so the first special still shows below the map */
+  height: 13rem;
   touch-action: none; /* the map takes drags and pinches; the page scrolls around it */
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
 }
 
+@media (min-width: 30rem) {
+  #map-svg {
+    height: min(50vh, 20rem);
+  }
+}
+
 @media (min-width: 48rem) {
   #map-svg {
-    height: min(70vh, 34rem);
+    height: min(52vh, 26rem);
   }
 }
 
@@ -1398,7 +1405,7 @@ button.danger {
   .map-side {
     display: block;
     margin-top: 0.5rem;
-    max-height: min(70vh, 34rem);
+    max-height: min(52vh, 26rem);
     overflow-y: auto;
   }
 

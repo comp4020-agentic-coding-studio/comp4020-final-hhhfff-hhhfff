@@ -53,7 +53,10 @@ README, stop and say so rather than picking one.
 
 ## What the pages must hold to
 
-- Specials come first on the page; the post form stays folded. A guest sees
+- Specials come first on the page; the post form stays folded. The store
+  map starts open (the user's decision; closing it is remembered on the
+  device), so it stays short on a phone and the first special still shows
+  on the first screen at 360px and 400px. A guest sees
   the feed and a prompt to log in, and the write buttons ask them to.
 - A guest's card is read-only: how much is left, confirmations, corrections
   and comments, with no buttons that would only be refused. Sold-out posts

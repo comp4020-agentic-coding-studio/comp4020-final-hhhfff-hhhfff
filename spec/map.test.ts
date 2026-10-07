@@ -34,3 +34,15 @@ it("the page credits OpenStreetMap beside the map, opening off-site safely", asy
   expect(credit!.getAttribute("target")).toBe("_blank");
   expect(credit!.getAttribute("rel")!.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
 });
+
+// The map starts open (the visitor can close it, and that is remembered on
+// their device), but the specials still lead: the loading line and the feed
+// are in the page, and the map is no taller than a phone can spare.
+it('the map starts open, with its toggle saying so, and the feed still in the page', async () => {
+  const html = await (await fetch(new URL('/', baseUrl))).text();
+  const document = new JSDOM(html).window.document;
+  expect(document.querySelector('#store-map')!.hasAttribute('hidden'), '#store-map should start open').toBe(false);
+  expect(document.querySelector('#map-toggle')!.getAttribute('aria-expanded')).toBe('true');
+  expect(document.querySelector('#feed-status')!.textContent).toMatch(/Loading specials/);
+  expect(document.querySelector('#feed')).not.toBeNull();
+});

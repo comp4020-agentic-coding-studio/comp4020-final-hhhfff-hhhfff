@@ -58,14 +58,15 @@
         <label for="store-filter">Showing</label>
         <select id="store-filter"><option value="">Loading stores…</option></select>
         <button type="button" id="locate" class="quiet" title="Sort stores by distance from where you are">Near me</button>
-        <button type="button" id="map-toggle" class="quiet" aria-expanded="false" aria-controls="store-map">Map</button>
+        <button type="button" id="map-toggle" class="quiet" aria-expanded="true" aria-controls="store-map">Map</button>
         <p class="hint" id="locate-status" aria-live="polite"></p>
       </section>
 
-      <!-- folded until asked for: the stores on real streets, sized by live specials.
+      <!-- open unless the visitor closed it (remembered on this device), and short on a
+           phone so the first special still shows below it: the stores on real streets, sized by live specials.
            The streets are public/streets.json, built once from OpenStreetMap; no map
            tiles or map service at runtime -->
-      <section id="store-map" class="card store-map" aria-labelledby="store-map-heading" hidden>
+      <section id="store-map" class="card store-map" aria-labelledby="store-map-heading">
         <div class="store-map-head">
           <h2 id="store-map-heading">Where the specials are</h2>
           <button type="button" id="map-close" class="quiet small">Close</button>
@@ -88,7 +89,7 @@
           <p class="hint" id="map-list-rest"></p>
         </div>
         </div>
-        <p class="hint">Bigger dot, more live specials. Drag to move, pinch or scroll to zoom. Pick a store to show only its specials; pick it again for all stores.</p>
+        <p class="hint map-hint">Bigger dot, more specials. Drag or pinch the map; pick a store to see only its specials.</p>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->

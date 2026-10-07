@@ -1526,10 +1526,30 @@ const refreshMapSoon = () => {
   mapRefresh = setTimeout(refreshMap, 1000);
 };
 
-function showMap(open) {
+// The map starts open; closing it is remembered on this device, and opening
+// it again forgets that.
+const MAP_CLOSED = "discountShow.mapClosed";
+const mapWasClosed = () => {
+  try {
+    return localStorage.getItem(MAP_CLOSED) === "1";
+  } catch {
+    return false;
+  }
+};
+
+function showMap(open, { remember = true } = {}) {
   $("#store-map").hidden = !open;
   $("#map-toggle").setAttribute("aria-expanded", String(open));
-  if (open) {
+  if (remember) {
+    try {
+      if (open) localStorage.removeItem(MAP_CLOSED);
+      else localStorage.setItem(MAP_CLOSED, "1");
+    } catch {
+      // private browsing: it opens again next time, which is the default anyway
+    }
+  }
+  // drawn once the store list is in (startup draws it then)
+  if (open && stores.length) {
     drawMap();
     refreshMap();
   }
@@ -1539,6 +1559,7 @@ $("#map-close").addEventListener("click", () => {
   showMap(false);
   $("#map-toggle").focus();
 });
+if (mapWasClosed()) showMap(false, { remember: false });
 
 function onLive(ev) {
   if (ev.type !== "notice") refreshMapSoon();
@@ -1669,6 +1690,7 @@ me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");
 renderStoreOptions();
+if (!$("#store-map").hidden) drawMap();
 await loadFeed();
 loadNotices();
 connectLive();
