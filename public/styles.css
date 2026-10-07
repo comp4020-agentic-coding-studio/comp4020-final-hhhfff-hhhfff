@@ -684,8 +684,10 @@ button.small {
   gap: 0.5rem;
 }
 
+/* last on the card, so only the poster's and an admin's cards have it and
+   it never leaves a gap in the middle of the others */
 .delete {
-  margin: 0 0 0.6rem;
+  margin: 0.4rem 0 0;
 }
 
 .delete-confirm {
@@ -823,7 +825,37 @@ button.danger {
   .feed {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+    row-gap: 0;
   }
+
+  /* Cards side by side share their inner rows (subgrid), so the price, the
+     stock buttons and the rest line up across a row however long each
+     card's text runs. Each part has a fixed row; a part a card doesn't show
+     leaves its row empty rather than pulling the rest up. The gap between
+     card rows is each card's own margin, which subgrid adds to its last row. */
+  .deal {
+    display: grid;
+    grid-row: span 11;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+    align-self: stretch;
+    align-content: start;
+    margin-bottom: 0.75rem;
+  }
+
+  /* the store always goes under the item, so a short name doesn't sit
+     beside it and leave a gap that a long name's card fills */
+  .deal > .deal-head { grid-row: 1; flex-direction: column; }
+  .deal > .prices { grid-row: 2; }
+  .deal > .meta { grid-row: 3; }
+  .deal > .stock { grid-row: 4; }
+  .deal > .stock-by { grid-row: 5; }
+  .deal > .trust { grid-row: 6; }
+  .deal > .history { grid-row: 7; }
+  .deal > .pending { grid-row: 8; }
+  .deal > .correct { grid-row: 9; }
+  .deal > .comments { grid-row: 10; }
+  .deal > .delete { grid-row: 11; }
 }
 
 @media (min-width: 64rem) {
