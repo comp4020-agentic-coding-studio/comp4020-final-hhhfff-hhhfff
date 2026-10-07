@@ -221,6 +221,7 @@ async function loadFeed() {
       return loadFeed();
     }
     deals = data;
+    clearWaiting(); // whatever was waiting is in this answer, if it fits
     renderFeed();
   } catch (err) {
     // on a slow or dropped connection, say so and offer a way back, keeping what's shown
@@ -1121,8 +1122,44 @@ function connectLive() {
 function onLive(ev) {
   if (ev.type === "notice") loadNotices();
   else if (ev.type === "deleted") removeCard(ev.id);
-  else if (ev.type === "new" && page === 1) reloadSoon(); // whether it fits this store and search is the server's call
+  else if (ev.type === "new") newPostWaiting(ev.id);
   else if (ev.type === "deal") refreshDeal(ev.id);
+}
+
+// A new post on page one doesn't push the feed down under the reader: a pill
+// says it's there, and the reader brings it in (whether it fits this store
+// and search is still the server's call). Nothing is fetched until then.
+let waiting = new Set();
+const newPosts = $("#new-posts");
+
+function newPostWaiting(id) {
+  if (page !== 1 || deals.some((d) => d.id === id)) return; // elsewhere, or my own post, already shown
+  waiting.add(id);
+  newPosts.textContent = waiting.size === 1 ? "↑ 1 new special" : `↑ ${waiting.size} new specials`;
+  newPosts.hidden = false;
+}
+
+function clearWaiting() {
+  waiting = new Set();
+  newPosts.hidden = true;
+}
+
+newPosts.addEventListener("click", async () => {
+  const before = new Set(deals.map((d) => d.id));
+  clearWaiting();
+  $("#feed-layout").scrollIntoView({ block: "start", behavior: "smooth" });
+  await loadFeed();
+  for (const d of deals) if (!before.has(d.id)) glow(d.id);
+});
+
+// a card someone else just changed glows once, so the change is seen
+function glow(id) {
+  const card = document.getElementById(`deal-${id}`);
+  if (!card) return;
+  card.classList.remove("updated");
+  void card.offsetWidth; // restart the animation if it's still running
+  card.classList.add("updated");
+  card.addEventListener("animationend", () => card.classList.remove("updated"), { once: true });
 }
 
 // Every open page hears every event at once. A page that has to ask the server
@@ -1168,13 +1205,17 @@ async function refreshDeal(id) {
   if (!card) return; // gone from the page while it was fetched
   deals = deals.map((x) => (x.id === id ? d : x));
   if (busy(card)) return; // the data is kept; the card catches up on the next render
-  if (card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
+  if (card.classList.contains("sold-out") !== (d.stock === "gone")) {
+    renderFeed(); // it moves
+    return glow(id);
+  }
   card.replaceWith(cardFor(
     d,
     storeById().get(d.storeId),
     !!card.querySelector("details.comments")?.open,
     !!card.querySelector("details.correct")?.open,
   ));
+  glow(id);
 }
 
 // --- start

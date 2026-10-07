@@ -1082,6 +1082,43 @@ button.danger {
   outline-offset: 2px;
 }
 
+/* someone else just changed this card: one glow, keeping the freshness edge */
+.deal.updated {
+  animation: updated 1.6s ease-out;
+}
+
+@keyframes updated {
+  0% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 3px color-mix(in srgb, var(--good) 70%, transparent); }
+  100% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 14px transparent; }
+}
+
+/* new posts wait in a pill that rides along at the top while scrolling */
+.new-posts-bar {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start; /* the bar takes no room; the pill keeps its own height */
+  height: 0;
+  overflow: visible;
+}
+
+.new-posts {
+  margin: 0.25rem 0 0;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  background: var(--good);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.25);
+  animation: drop-in 0.3s ease-out;
+}
+
+@keyframes drop-in {
+  from { opacity: 0; translate: 0 -0.75rem; }
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

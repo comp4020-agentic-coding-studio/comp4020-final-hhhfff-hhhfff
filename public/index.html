@@ -117,6 +117,8 @@
         <section aria-labelledby="feed-heading">
           <h2 id="feed-heading" class="visually-hidden" tabindex="-1">Specials</h2>
           <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
+          <!-- new posts wait here to be asked for, rather than pushing the feed down mid-read -->
+          <div class="new-posts-bar" aria-live="polite"><button type="button" id="new-posts" class="new-posts" hidden></button></div>
           <ol id="feed" class="feed" aria-busy="true"></ol>
           <!-- ten specials a page; filled in by the script once it knows how many there are -->
           <nav id="pager" class="pager" aria-label="Pages of specials" hidden></nav>
