@@ -323,6 +323,12 @@ button.small {
   margin: 0;
 }
 
+/* under a feed that has more to add; it pulls the feed's bottom margin back up */
+.feed-more {
+  margin: -2rem 0 3rem;
+  text-align: center;
+}
+
 /* the chains' own specials pages: a card under the feed on a phone, a
    sidebar beside it on a wide screen, the middle of the page when it's empty */
 .chains {

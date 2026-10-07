@@ -159,22 +159,37 @@ async function loadNotices() {
 let deals = [];
 let feedRequest = 0; // only the latest request's answer is shown, however they arrive
 
+// The server sends the feed a page at a time (FEED_PAGE in server/server.ts),
+// each carrying on after the last deal already here; a full page means there
+// may be more. The next is fetched when the reader nears the end.
+const FEED_PAGE = 100;
+let serverHasMore = false;
+let lastFromServer; // id of the last deal of the last page, in the server's order (live updates reorder `deals`)
+let fetchingMore = false;
+
 // what's typed in the search box, tidied; "" when not searching
 const query = () => $("#search").value.trim().replace(/\s+/g, " ");
 
-async function loadFeed() {
+function feedPath(after) {
   const params = new URLSearchParams();
   if ($("#store-filter").value) params.set("store", $("#store-filter").value);
   if (query()) params.set("q", query());
+  if (after) params.set("after", after);
+  return `/api/deals${params.size ? `?${params}` : ""}`;
+}
+
+async function loadFeed() {
   const feed = $("#feed");
   const status = $("#feed-status");
   const mine = ++feedRequest;
   feed.setAttribute("aria-busy", "true");
   if (!feed.children.length) status.textContent = query() ? "Searching…" : "Loading specials…";
   try {
-    const found = await api(`/api/deals${params.size ? `?${params}` : ""}`);
+    const found = await api(feedPath());
     if (mine !== feedRequest) return;
     deals = found;
+    serverHasMore = found.length === FEED_PAGE;
+    lastFromServer = found.at(-1)?.id;
     renderFeed();
   } catch (err) {
     // on a slow or dropped connection, say so and offer a way back, keeping what's shown
@@ -197,19 +212,31 @@ function replaceDeal(updated) {
   renderFeed();
 }
 
+// The feed puts cards on the page a screenful or two at a time and adds more
+// as the reader nears the end: laying out all 200 at once held up typing in
+// the search box for a moment on a phone. A re-render of the same list (a live
+// update) keeps as many as were shown; a new search or store starts again.
+const PAGE = 24;
+let shown = PAGE;
+let shownFor = "";
+
 function renderFeed() {
   deals = shelfOrder(deals);
   const byId = storeById();
+  const list = `${$("#store-filter").value}|${query()}`;
+  if (list !== shownFor) [shown, shownFor] = [PAGE, list];
   const keep = (sel) => new Set([...document.querySelectorAll(`#feed ${sel}[open]`)].map((d) => d.closest("li").dataset.id));
   const [openComments, openCorrect] = [keep("details.comments"), keep("details.correct")];
   $("#feed").replaceChildren(
-    ...deals.map((d) => dealCard(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
+    ...deals.slice(0, shown).map((d) => cardFor(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
+  $("#feed-more").hidden = !moreToShow();
+  fillScreen();
   const store = byId.get($("#store-filter").value);
   const q = query();
   const at = store ? ` at ${store.name}, ${store.where}` : "";
   $("#feed-status").textContent = q && deals.length
-    ? `${deals.length === 1 ? "1 special matches" : `${deals.length} specials match`} “${q}”${at}.`
+    ? `${deals.length === 1 ? "1 special matches" : `${deals.length}${serverHasMore ? "+" : ""} specials match`} “${q}”${at}.`
     : "";
   // an empty search isn't an empty feed: say so, and offer the way back
   $("#empty-title").textContent = q
@@ -222,6 +249,51 @@ function renderFeed() {
   $("#clear-search").hidden = !q;
   showChains();
 }
+
+const moreToShow = () => deals.length > shown || serverHasMore;
+
+async function showMore() {
+  if (deals.length < shown + PAGE && serverHasMore && !fetchingMore) await fetchMore();
+  if (deals.length <= shown) return;
+  const byId = storeById();
+  $("#feed").append(...deals.slice(shown, shown + PAGE).map((d) => cardFor(d, byId.get(d.storeId), false, false)));
+  shown += PAGE;
+  $("#feed-more").hidden = !moreToShow();
+  fillScreen();
+}
+
+// The next page from the server, for the list on screen (a search or store
+// change meanwhile throws it away). A post that moved since (its stock
+// changed) could come twice; it's kept once.
+async function fetchMore() {
+  const mine = feedRequest;
+  fetchingMore = true;
+  try {
+    const page = await api(feedPath(lastFromServer));
+    if (mine !== feedRequest) return;
+    const have = new Set(deals.map((d) => d.id));
+    deals = [...deals, ...page.filter((d) => !have.has(d.id))];
+    serverHasMore = page.length === FEED_PAGE;
+    lastFromServer = page.at(-1)?.id ?? lastFromServer;
+  } catch {
+    // the button stays, so the reader can ask again
+  } finally {
+    fetchingMore = false;
+  }
+}
+
+// The observer only speaks when the marker comes near; if it is still near
+// after cards went in (a tall screen, a short search), add more next frame.
+const NEAR = 1200;
+function fillScreen() {
+  const more = $("#feed-more");
+  if (!more.hidden && more.getBoundingClientRect().top < innerHeight + NEAR) requestAnimationFrame(showMore);
+}
+
+$("#feed-more button").addEventListener("click", showMore);
+// well before the reader reaches the end, so scrolling rarely meets the button
+new IntersectionObserver((seen) => seen.some((e) => e.isIntersecting) && showMore(), { rootMargin: `${NEAR}px 0px` })
+  .observe($("#feed-more"));
 
 // With posts, the chains' links are a sidebar; with none, they fill the middle
 // under the empty-feed (or empty-search) note. Hidden until the feed first loads.
@@ -249,7 +321,7 @@ function searchChanged() {
     else url.searchParams.delete("q");
     history.replaceState(null, "", url);
     loadFeed();
-  }, 200);
+  }, 150);
 }
 
 function clearSearch() {
@@ -292,14 +364,40 @@ function highlighted(text) {
   return out;
 }
 
+// Built cards, kept so that a search coming back with posts already built
+// moves them rather than building them again: building ~200 cards holds up
+// typing for a moment on a phone. A card is reused only while its deal, who is
+// looking and the minute ("5 min ago") are unchanged, so nothing on it is stale;
+// the search marks and the distance are repainted every time.
+const built = new Map(); // deal id -> { key, li }
+const cardKey = (d) => `${JSON.stringify(d)}|${me?.id ?? ""}|${me?.role ?? ""}|${Math.floor(Date.now() / 60_000)}`;
+
+function cardFor(d, store, commentsOpen, correctOpen) {
+  const key = cardKey(d);
+  const hit = built.get(d.id);
+  if (hit?.key === key) {
+    paintNames(hit.li, d, store);
+    return hit.li;
+  }
+  if (built.size > 1000) built.clear(); // a long session doesn't keep every card it ever saw
+  const li = dealCard(d, store, commentsOpen, correctOpen);
+  built.set(d.id, { key, li });
+  return li;
+}
+
+// the item and store lines, which change with the search and with "Near me"
+function paintNames(li, d, store) {
+  $(".item", li).replaceChildren(...highlighted(d.item));
+  $(".store", li).replaceChildren(...highlighted(store ? `${store.name}, ${store.where}` : d.storeId),
+    store ? ` · ${km(origin, store).toFixed(1)} km` : "");
+}
+
 function dealCard(d, store, commentsOpen, correctOpen) {
   const li = $("#deal-template").content.firstElementChild.cloneNode(true);
   li.dataset.id = d.id;
   li.id = `deal-${d.id}`;
   li.classList.toggle("sold-out", d.stock === "gone");
-  $(".item", li).replaceChildren(...highlighted(d.item));
-  $(".store", li).replaceChildren(...highlighted(store ? `${store.name}, ${store.where}` : d.storeId),
-    store ? ` · ${km(origin, store).toFixed(1)} km` : "");
+  paintNames(li, d, store);
   $(".now", li).textContent = money(d.nowCents);
   $(".was", li).textContent = money(d.wasCents);
   $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
@@ -938,6 +1036,7 @@ function onLive(ev) {
 
 function removeCard(id) {
   deals = deals.filter((x) => x.id !== id);
+  built.delete(id);
   document.getElementById(`deal-${id}`)?.remove();
   if (!deals.length) renderFeed();
   else showChains();
@@ -960,13 +1059,17 @@ async function refreshDeal(id) {
   const filter = $("#store-filter").value;
   if (filter && filter !== d.storeId) return;
   const card = document.getElementById(`deal-${id}`);
+  const known = deals.some((x) => x.id === id);
+  // further down than the feed has shown yet: keep the news for when it gets there
+  if (!card && known) return void (deals = deals.map((x) => (x.id === id ? d : x)));
+  // on a page not fetched yet: it'll come in its place. Only a brand-new post goes on top.
+  if (!card && serverHasMore && Date.now() - Date.parse(d.createdAt) > 60_000) return;
   // whether a new post matches the search is the server's call: ask it again
   if (!card && query()) return loadFeed();
-  const known = deals.some((x) => x.id === id);
   deals = known ? deals.map((x) => (x.id === id ? d : x)) : [d, ...deals];
   if (card && busy(card)) return; // the data is kept; the card catches up on the next render
   if (card && card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
-  const fresh = dealCard(
+  const fresh = cardFor(
     d,
     storeById().get(d.storeId),
     !!card?.querySelector("details.comments")?.open,
