@@ -1082,6 +1082,76 @@ button.danger {
   outline-offset: 2px;
 }
 
+/* Before the first answer: the shapes of a card, shimmering. */
+.skeleton {
+  display: grid;
+  gap: 0.6rem;
+  align-content: start;
+  min-height: 15rem;
+}
+
+.bone {
+  display: block;
+  height: 0.9rem;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--soft) 25%, var(--line) 50%, var(--soft) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s linear infinite;
+}
+
+.bone.title { width: 65%; height: 1.2rem; }
+.bone.line { width: 45%; }
+.bone.line.short { width: 80%; }
+.bone.ticket { width: 11rem; height: 2.6rem; border-radius: 4px 12px 12px 4px; }
+.bone.bar { width: 9rem; height: 1.6rem; }
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+/* in columns a skeleton spans the card's rows like a real card does */
+@media (min-width: 44rem) {
+  .feed > .skeleton {
+    grid-row: span 11;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Turning a page slides the feed (forward from the right, back from the
+   left); changing store cross-fades. Only the feed moves, never the header. */
+#feed {
+  view-transition-name: feed;
+}
+
+::view-transition-old(feed) {
+  animation: 0.18s ease-in both feed-out;
+}
+
+::view-transition-new(feed) {
+  animation: 0.26s ease-out both feed-in;
+}
+
+:root[data-nav="prev"]::view-transition-old(feed) { animation-name: feed-out-back; }
+:root[data-nav="prev"]::view-transition-new(feed) { animation-name: feed-in-back; }
+:root[data-nav="swap"]::view-transition-old(feed) { animation-name: fade-out; }
+:root[data-nav="swap"]::view-transition-new(feed) { animation-name: fade-in; }
+
+@keyframes feed-out { to { opacity: 0; translate: -2.5rem 0; } }
+@keyframes feed-in { from { opacity: 0; translate: 2.5rem 0; } }
+@keyframes feed-out-back { to { opacity: 0; translate: 2.5rem 0; } }
+@keyframes feed-in-back { from { opacity: 0; translate: -2.5rem 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* someone else just changed this card: one glow, keeping the freshness edge */
 .deal.updated {
   animation: updated 1.6s ease-out;

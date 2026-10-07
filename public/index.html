@@ -119,7 +119,13 @@
           <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
           <!-- new posts wait here to be asked for, rather than pushing the feed down mid-read -->
           <div class="new-posts-bar" aria-live="polite"><button type="button" id="new-posts" class="new-posts" hidden></button></div>
-          <ol id="feed" class="feed" aria-busy="true"></ol>
+          <!-- the shapes of a few cards until the first answer, so the page isn't blank; hidden from screen readers, which hear "Loading specials…" -->
+          <ol id="feed" class="feed" aria-busy="true">
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+            <li class="card skeleton" aria-hidden="true"><i class="bone title"></i><i class="bone line"></i><i class="bone ticket"></i><i class="bone line short"></i><i class="bone bar"></i></li>
+          </ol>
           <!-- ten specials a page; filled in by the script once it knows how many there are -->
           <nav id="pager" class="pager" aria-label="Pages of specials" hidden></nav>
         </section>

@@ -204,7 +204,9 @@ function syncAddress(push) {
   else history.replaceState(null, "", url);
 }
 
-async function loadFeed() {
+// `motion` animates the swap when the reader turned a page ("next", "prev")
+// or changed store ("swap"); live updates and typing don't animate.
+async function loadFeed(motion) {
   const feed = $("#feed");
   const status = $("#feed-status");
   const mine = ++feedRequest;
@@ -218,18 +220,25 @@ async function loadFeed() {
     if (!data.length && page > lastPage()) {
       page = lastPage();
       syncAddress(false);
-      return loadFeed();
+      return loadFeed(motion);
     }
-    deals = data;
-    clearWaiting(); // whatever was waiting is in this answer, if it fits
-    renderFeed();
+    const show = () => {
+      deals = data;
+      clearWaiting(); // whatever was waiting is in this answer, if it fits
+      renderFeed();
+    };
+    if (motion && document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      document.documentElement.dataset.nav = motion;
+      document.startViewTransition(show);
+    } else show();
   } catch (err) {
     // on a slow or dropped connection, say so and offer a way back, keeping what's shown
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "quiet small";
     retry.textContent = "Try again";
-    retry.addEventListener("click", loadFeed);
+    retry.addEventListener("click", () => loadFeed());
+    feed.querySelectorAll(".skeleton").forEach((bone) => bone.remove());
     status.replaceChildren(`Couldn't load specials: ${err.message}. `, retry);
   } finally {
     if (mine === feedRequest) feed.setAttribute("aria-busy", "false");
@@ -328,9 +337,10 @@ function renderPager() {
 }
 
 function goToPage(n) {
+  const motion = n > page ? "next" : "prev";
   page = n;
   syncAddress(true);
-  loadFeed();
+  loadFeed(motion);
   // back to the top of the feed, and tell a screen reader where it is
   $("#feed-heading").focus({ preventScroll: true });
   $("#feed-layout").scrollIntoView({ block: "start" });
@@ -341,7 +351,7 @@ addEventListener("popstate", () => {
   const params = new URLSearchParams(location.search);
   $("#search").value = params.get("q") ?? "";
   page = pageFromAddress();
-  loadFeed();
+  loadFeed("swap");
 });
 
 // With posts, the chains' links are a sidebar; with none, they fill the middle
@@ -1223,7 +1233,7 @@ async function refreshDeal(id) {
 $("#store-filter").addEventListener("change", () => {
   page = 1;
   syncAddress(false);
-  loadFeed();
+  loadFeed("swap");
 });
 // coming back to the tab picks up what others posted meanwhile
 document.addEventListener("visibilitychange", () => {
