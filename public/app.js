@@ -681,6 +681,8 @@ async function confirmDeal(id) {
   if (!requireLogin()) return;
   try {
     replaceDeal(await api(`/api/deals/${id}/confirm`, {}));
+    buzz();
+    plusOne(id);
   } catch (err) {
     $("#feed-status").textContent = err.message;
   }
@@ -690,9 +692,25 @@ async function updateStock(d, stock) {
   if (!requireLogin()) return;
   try {
     replaceDeal(await api(`/api/deals/${d.id}/stock`, { stock }));
+    buzz();
   } catch (err) {
     $("#feed-status").textContent = err.message;
   }
+}
+
+// A small acknowledgement for adding to a post: a light buzz on a phone that
+// can, and a "+1" that floats up from the confirmations.
+const buzz = () => navigator.vibrate?.(15);
+
+function plusOne(id) {
+  const where = document.querySelector(`#deal-${id} .trust`);
+  if (!where) return;
+  const plus = document.createElement("span");
+  plus.className = "plus-one";
+  plus.textContent = "+1";
+  plus.setAttribute("aria-hidden", "true");
+  where.append(plus);
+  setTimeout(() => plus.remove(), 1200); // not on animationend, which reduced motion never fires
 }
 
 async function loadComments(id, li) {
@@ -892,7 +910,17 @@ post.addEventListener("submit", async (e) => {
 // it (or the "already posted?" check) is open, the toggle steps aside.
 const toggle = $("#post-toggle");
 
+// On a phone the form is a sheet over the feed (see styles.css): a backdrop
+// behind it closes it, and the page under it holds still.
+const backdrop = $("#sheet-backdrop");
+function sheet(open) {
+  backdrop.hidden = !open;
+  document.body.classList.toggle("sheet-open", open);
+}
+backdrop.addEventListener("click", () => closePost({ refocus: true }));
+
 function openPost() {
+  sheet(true);
   similar.hidden = true;
   post.hidden = false;
   toggle.hidden = true;
@@ -901,6 +929,7 @@ function openPost() {
 }
 
 function closePost({ refocus = false } = {}) {
+  sheet(false);
   similar.hidden = true;
   post.hidden = true;
   toggle.hidden = false;
@@ -1229,6 +1258,13 @@ async function refreshDeal(id) {
 }
 
 // --- start
+
+// The search and store row stays at the top while scrolling. It shows a
+// shadow once actually stuck, and its height keeps the new-posts pill and
+// page jumps clear of it.
+const filters = $(".filters");
+new IntersectionObserver(([e]) => filters.classList.toggle("stuck", !e.isIntersecting)).observe($("#filters-top"));
+new ResizeObserver(() => document.documentElement.style.setProperty("--filters-h", `${filters.offsetHeight}px`)).observe(filters);
 
 $("#store-filter").addEventListener("change", () => {
   page = 1;

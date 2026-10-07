@@ -46,6 +46,8 @@
         </form>
       </section>
 
+      <!-- when this scrolls away, the search row below is stuck to the top -->
+      <div id="filters-top"></div>
       <section class="filters" aria-label="Find specials">
         <!-- searched on the server, so posts past the feed's first 200 are found too -->
         <form id="search-form" class="search" role="search">
@@ -101,6 +103,9 @@
       </form>
 
       <!-- shown instead of posting when the special may already be in the feed -->
+      <!-- behind the post form when it is a sheet on a phone; tapping it closes the form -->
+      <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+
       <section id="similar" class="card similar" aria-labelledby="similar-heading" hidden tabindex="-1">
         <h2 id="similar-heading">Already posted?</h2>
         <p class="hint">Someone may have beaten you to it. If one of these is your special, add to it instead of posting it again.</p>
