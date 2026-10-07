@@ -2,7 +2,8 @@
 
 This describes the project as it stands on 6 October 2026: a deployed first
 version, a README that argues what "good" means, and a harness that is newer
-than the code it governs. I say where that order cost me.
+than the code it governs. I say where that order cost me. Three corrections
+from 7 October are added to the correction loop below.
 
 ## From the brief to an idea
 
@@ -77,6 +78,42 @@ screen
 ([`f0dd697`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/f0dd697)).
 The layout pass followed the README's logic, not a fashion: the thing a
 hungry reader came for goes first.
+
+Three later corrections, on 7 October, came from using the app myself.
+
+Searching for "cola" listed every Coles post
+([`44ccbd9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/44ccbd9)).
+The search I had accepted let a four-letter word match with a letter off,
+so "cola" matched "cole", and it matched inside words, so it also found
+"chocolate". Short words now never allow a slip, Latin words match only from
+the start of a word, and a near-miss spelling is shown only when nothing
+matches as typed. A test now checks that "cola" finds the cola and nothing
+else. My tests had checked that a typo was forgiven, not that forgiving one
+could go wrong.
+
+Search also felt slow while typing
+([`eb77673`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/eb77673)).
+Profiling in Chrome at a 4× CPU slowdown showed the server answering in
+milliseconds; the cost was the page rebuilding and laying out about 200
+cards for every result, which blocked typing for about 200 ms. The page then
+put a few cards on screen at a time and reused cards it had already built,
+which brought the longest block to about 50 ms. That scroll-to-load-more was
+later replaced by numbered pages of ten, because one page held too many
+posts
+([`ad4dea9`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/ad4dea9)).
+
+When I asked whether the app needed to handle high concurrency, the answer
+came from a measurement rather than a guess
+([`6ccc571`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/6ccc571)).
+On a throwaway copy with 1,000 live posts, page one served 270 requests a
+second and a search 121, with no errors: far more than students near one
+campus would send, and the app cannot add machines anyway, since its data is
+one SQLite file on one 256 MB volume. Two costs did grow with the feed, so I
+fixed those instead of the architecture. The server now keeps its sorted
+lists until a write changes them (page one rose to 523 requests a second, a
+repeated search to 542), and a live event makes only the pages showing that
+post fetch it, with page-one reloads spread over two seconds. A search that
+differs every time is still about 123 a second.
 
 ## What I did late, and the cost
 
