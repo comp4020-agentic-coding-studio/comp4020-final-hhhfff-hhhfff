@@ -300,6 +300,126 @@ button.small {
   gap: 0.75rem;
 }
 
+.feed:empty {
+  margin: 0;
+}
+
+/* the chains' own specials pages: a card under the feed on a phone, a
+   sidebar beside it on a wide screen, the middle of the page when it's empty */
+.chains {
+  margin: -1.5rem 0 3rem;
+  padding: 1rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.chains h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+
+.chains > .hint {
+  margin: 0.25rem 0;
+}
+
+.chain-group {
+  margin: 0.9rem 0 0.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem 0.75rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.chain:first-child {
+  border-top: 0;
+}
+
+.chain-name {
+  font-weight: 700;
+}
+
+.chain-where {
+  margin-left: 0.2rem;
+  font-weight: normal;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.chain-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chain-links a {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.chain-links a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chain-links a::after {
+  content: " ↗";
+  color: var(--muted);
+}
+
+/* nothing posted: the note and the links take the middle of the page */
+.chains.empty {
+  max-width: 34rem;
+  margin: 1.5rem auto 3rem;
+  padding: 1.5rem 1.25rem;
+}
+
+.chains-empty {
+  text-align: center;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.chains-empty h2 {
+  font-size: 1.2rem;
+}
+
+.chains-empty .hint {
+  margin: 0.4rem 0 0.9rem;
+}
+
+.chains-empty button {
+  padding: 0.6rem 1.2rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .deal-head {
   display: flex;
   flex-wrap: wrap;
@@ -709,6 +829,30 @@ button.danger {
 @media (min-width: 64rem) {
   .feed {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* with posts, the chains' links become a sidebar and the feed keeps two
+     columns beside it */
+  .feed-layout.has-side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .feed-layout.has-side .feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .feed-layout.has-side .chains {
+    position: sticky;
+    top: 1rem;
+    margin: 1rem 0 3rem;
+  }
+
+  .feed-layout.has-side .chain {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

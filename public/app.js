@@ -197,10 +197,25 @@ function renderFeed() {
     ...deals.map((d) => dealCard(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
   const store = byId.get($("#store-filter").value);
-  $("#feed-status").textContent = deals.length
-    ? ""
-    : `Nothing posted${store ? ` for ${store.name}, ${store.where}` : ""} yet. Spotted a special? Be the first.`;
+  $("#feed-status").textContent = "";
+  $("#empty-title").textContent = store
+    ? `Nothing shared for ${store.name}, ${store.where} yet`
+    : "No one has shared a special yet";
+  showChains();
 }
+
+// With posts, the chains' links are a sidebar; with none, they fill the middle
+// under the empty-feed note. Hidden until the feed first loads.
+function showChains() {
+  const empty = !deals.length;
+  $("#chains").hidden = false;
+  $("#chains").classList.toggle("empty", empty);
+  $("#chains-empty").hidden = !empty;
+  $("#feed-layout").classList.toggle("has-side", !empty);
+}
+
+// the same toggle as the post button, so a guest is asked to log in rather than shown a form
+$("#post-first").addEventListener("click", () => toggle.click());
 
 function dealCard(d, store, commentsOpen, correctOpen) {
   const li = $("#deal-template").content.firstElementChild.cloneNode(true);
@@ -849,6 +864,7 @@ function removeCard(id) {
   deals = deals.filter((x) => x.id !== id);
   document.getElementById(`deal-${id}`)?.remove();
   if (!deals.length) renderFeed();
+  else showChains();
 }
 
 // Someone is mid-way through something on this card: don't pull it out from under them.
@@ -882,6 +898,7 @@ async function refreshDeal(id) {
   else {
     $("#feed").prepend(fresh);
     $("#feed-status").textContent = "";
+    showChains();
   }
 }
 

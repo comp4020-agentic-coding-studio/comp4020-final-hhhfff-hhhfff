@@ -105,11 +105,71 @@
         </div>
       </section>
 
-      <section aria-labelledby="feed-heading">
-        <h2 id="feed-heading" class="visually-hidden">Specials</h2>
-        <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
-        <ol id="feed" class="feed" aria-busy="true"></ol>
-      </section>
+      <!-- with posts, the chains' links sit beside the feed (below it on a phone);
+           with none, they fill the middle under a note that nothing is shared yet -->
+      <div id="feed-layout" class="feed-layout">
+        <section aria-labelledby="feed-heading">
+          <h2 id="feed-heading" class="visually-hidden">Specials</h2>
+          <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
+          <ol id="feed" class="feed" aria-busy="true"></ol>
+        </section>
+
+        <!-- links only: nothing is fetched from these sites or copied in -->
+        <aside id="chains" class="chains" aria-labelledby="chains-heading" hidden>
+          <div id="chains-empty" class="chains-empty" hidden>
+            <h2 id="empty-title">No one has shared a special yet</h2>
+            <p class="hint">Spotted a markdown in a shop near ANU? Post it and the next student can walk there for it.</p>
+            <button type="button" id="post-first">Post the first one</button>
+          </div>
+          <h2 id="chains-heading">The big chains' own specials</h2>
+          <p class="hint">Their own pages, not posts here: nobody has checked them on the shelf.</p>
+          <h3 class="chain-group">Near ANU</h3>
+          <ul class="chain-list">
+            <li class="chain">
+              <span class="chain-name">Coles <span class="chain-where">Civic</span></span>
+              <span class="chain-links">
+                <a href="https://www.coles.com.au/on-special" target="_blank" rel="noopener noreferrer">Specials</a>
+                <a href="https://www.coles.com.au/catalogues" target="_blank" rel="noopener noreferrer">Catalogue</a>
+              </span>
+            </li>
+            <li class="chain">
+              <span class="chain-name">ALDI <span class="chain-where">Civic</span></span>
+              <span class="chain-links">
+                <a href="https://www.aldi.com.au/special-buys" target="_blank" rel="noopener noreferrer">Special Buys</a>
+                <a href="https://www.aldi.com.au/catalogues" target="_blank" rel="noopener noreferrer">Catalogue</a>
+              </span>
+            </li>
+            <li class="chain">
+              <span class="chain-name">IGA <span class="chain-where">O'Connor, Ainslie</span></span>
+              <span class="chain-links">
+                <a href="https://www.iga.com.au/catalogue/" target="_blank" rel="noopener noreferrer">Catalogue</a>
+              </span>
+            </li>
+          </ul>
+          <h3 class="chain-group">Further out in Canberra</h3>
+          <ul class="chain-list">
+            <li class="chain">
+              <span class="chain-name">Woolworths</span>
+              <span class="chain-links">
+                <a href="https://www.woolworths.com.au/shop/browse/specials" target="_blank" rel="noopener noreferrer">Specials</a>
+                <a href="https://www.woolworths.com.au/shop/catalogue" target="_blank" rel="noopener noreferrer">Catalogue</a>
+              </span>
+            </li>
+            <li class="chain">
+              <span class="chain-name">Supabarn</span>
+              <span class="chain-links">
+                <a href="https://www.supabarn.com.au/brochure" target="_blank" rel="noopener noreferrer">Brochure</a>
+              </span>
+            </li>
+            <li class="chain">
+              <span class="chain-name">Costco <span class="chain-where">Majura Park, members</span></span>
+              <span class="chain-links">
+                <a href="https://www.costco.com.au/c/hot-buys" target="_blank" rel="noopener noreferrer">Hot Buys</a>
+              </span>
+            </li>
+          </ul>
+        </aside>
+      </div>
     </main>
 
     <template id="deal-template">
