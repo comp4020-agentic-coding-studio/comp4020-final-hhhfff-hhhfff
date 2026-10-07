@@ -36,6 +36,13 @@ const ymd = (d) => new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Canbe
 const dayText = (date) => (date === ymd(new Date()) ? "today" : dayFmt.format(new Date(`${date}T12:00:00`)));
 const endsText = (endsOn) => (endsOn ? `ends ${dayText(endsOn)}` : "no end date");
 
+// hours left until midnight in Canberra, when a special ending "today" stops
+const canberraClock = new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Canberra", hour: "numeric", minute: "numeric", hourCycle: "h23" });
+function hoursToMidnight() {
+  const [h, m] = canberraClock.format(new Date()).split(":").map(Number);
+  return 24 - h - m / 60;
+}
+
 const SOURCE_TEXT = {
   "in-store": "seen in store",
   "store-website": "from the store's site",
@@ -424,6 +431,24 @@ function cardFor(d, store, commentsOpen, correctOpen) {
   return li;
 }
 
+// How fresh a card is: its edge goes green within the hour (with a pulsing
+// dot for the last ten minutes), amber within six, then grey. One ending
+// today counts down to midnight, red in its last two hours. Repainted in
+// place every minute, so a card being typed into is never rebuilt for it.
+const MINUTE = 60_000;
+function paintFreshness(li) {
+  const age = Date.now() - Date.parse(li.dataset.touched);
+  li.dataset.fresh = age < 10 * MINUTE ? "now" : age < 60 * MINUTE ? "fresh" : age < 360 * MINUTE ? "recent" : "stale";
+  const badge = $(".ends-soon", li);
+  badge.hidden = li.dataset.endsOn !== ymd(new Date()) || li.classList.contains("sold-out");
+  if (badge.hidden) return;
+  const left = hoursToMidnight();
+  badge.textContent = left < 1 ? "Ends tonight · under an hour left" : `Ends tonight · ${Math.floor(left)} h left`;
+  badge.classList.toggle("urgent", left < 2);
+}
+
+setInterval(() => document.querySelectorAll("#feed > li").forEach(paintFreshness), MINUTE);
+
 // the item and store lines, which change with the search and with "Near me"
 function paintNames(li, d, store) {
   $(".item", li).replaceChildren(...highlighted(d.item));
@@ -436,6 +461,10 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   li.dataset.id = d.id;
   li.id = `deal-${d.id}`;
   li.classList.toggle("sold-out", d.stock === "gone");
+  // the last time anyone touched it: posted, reported stock, or corrected
+  li.dataset.touched = [d.createdAt, d.stockAt, ...d.history.map((h) => h.at)].sort().at(-1);
+  li.dataset.endsOn = d.endsOn ?? "";
+  paintFreshness(li);
   paintNames(li, d, store);
   $(".now", li).textContent = money(d.nowCents);
   $(".was", li).textContent = money(d.wasCents);

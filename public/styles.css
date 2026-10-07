@@ -559,6 +559,77 @@ button.small {
   gap: 0 1rem;
 }
 
+/* Freshness: a strip down the card's left edge, green within the hour,
+   amber within six, then faint; a pulsing dot for the last ten minutes. */
+.deal {
+  --fresh: transparent;
+  box-shadow: inset 4px 0 0 var(--fresh);
+}
+
+.deal[data-fresh="now"],
+.deal[data-fresh="fresh"] {
+  --fresh: var(--good);
+}
+
+.deal[data-fresh="recent"] {
+  --fresh: #d4a017;
+}
+
+.deal[data-fresh="stale"],
+.deal.sold-out {
+  --fresh: var(--line);
+}
+
+.deal[data-fresh="now"]:not(.sold-out) .item::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin: 0 0.45rem 0.15rem 0;
+  border-radius: 50%;
+  background: var(--good);
+  vertical-align: middle;
+  animation: pulse 1.8s ease-out infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
+  100% { box-shadow: 0 0 0 0.5rem transparent; }
+}
+
+/* ends today: a countdown to midnight, red for the last two hours */
+.ends-soon {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--tint-line);
+  border-radius: 999px;
+  background: var(--tint);
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ends-soon.urgent {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  animation: urgent 2s ease-in-out infinite;
+}
+
+@keyframes urgent {
+  50% { opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 .deal h3 {
   margin: 0;
   font-size: 1.1rem;
@@ -1146,7 +1217,7 @@ button.danger {
 
   /* the store always goes under the item, so a short name doesn't sit
      beside it and leave a gap that a long name's card fills */
-  .deal > .deal-head { grid-row: 1; flex-direction: column; }
+  .deal > .deal-head { grid-row: 1; flex-direction: column; justify-content: flex-start; }
   .deal > .prices { grid-row: 2; }
   .deal > .meta { grid-row: 3; }
   .deal > .stock,
