@@ -44,6 +44,7 @@ const SOURCE_TEXT = {
 };
 
 const STOCK_TEXT = { plenty: "plenty", some: "some", few: "only a few", gone: "sold out" };
+const STOCK_LEVEL = { gone: 0, few: 1, some: 2, plenty: 3 }; // cells of the bar filled
 
 const FIELD_TEXT = { item: "Item", wasCents: "Usual price", nowCents: "Special price", endsOn: "End date" };
 const FIELDS = ["item", "wasCents", "nowCents", "endsOn"];
@@ -451,20 +452,27 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   if (isMe(d.author) || isAdmin()) wireDelete(d, li);
   if (!isMe(d.author)) $(".delete-start", li).textContent = "Delete post (admin)";
 
-  // a guest sees how much is left; only someone logged in gets the buttons to report it
+  // How much is left, as a bar filled to the level (the card's data-stock
+  // colours it). Someone logged in reports by pressing a level; a guest gets
+  // the same bar read-only, with the level in words.
+  const level = STOCK_LEVEL[d.stock];
+  li.dataset.stock = d.stock;
   const group = $(".stock", li);
+  const read = $(".stock-read", li);
   group.hidden = !me;
+  read.hidden = !!me;
   group.setAttribute("aria-label", `How much ${d.item} is left`);
   for (const b of group.querySelectorAll("button")) {
     b.setAttribute("aria-pressed", String(b.dataset.stock === d.stock));
+    b.classList.toggle("filled", STOCK_LEVEL[b.dataset.stock] <= level && b.dataset.stock !== "gone");
     b.addEventListener("click", () => updateStock(d, b.dataset.stock));
   }
+  read.querySelectorAll(".meter i").forEach((cell, n) => cell.classList.toggle("filled", n < level));
+  $(".level", read).textContent = STOCK_TEXT[d.stock][0].toUpperCase() + STOCK_TEXT[d.stock].slice(1);
   // who said so, and the two reports before, so a sudden flip-flop is visible
   const earlier = d.stockHistory.slice(1, 3).map((r) => `${STOCK_TEXT[r.stock]} (${nameOf(r.by)}, ${ago(r.at)})`);
   $(".stock-by", li).textContent =
-    // the pressed button already shows the level to someone logged in
-    (me ? `by ${nameOf(d.stockBy)}, ${ago(d.stockAt)}` : `Left: ${STOCK_TEXT[d.stock]} · ${nameOf(d.stockBy)}, ${ago(d.stockAt)}`) +
-    (earlier.length ? `. Before: ${earlier.join(", ")}` : "");
+    `by ${nameOf(d.stockBy)}, ${ago(d.stockAt)}` + (earlier.length ? `. Before: ${earlier.join(", ")}` : "");
 
   // confirmations
   const confirmedByMe = d.confirmedBy.some(isMe);

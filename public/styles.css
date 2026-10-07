@@ -675,11 +675,31 @@ button.small {
   color: var(--muted);
 }
 
-.stock {
+/* How much is left: a bar of three cells filled from the left like a
+   battery, in the level's colour; sold out is its own button. */
+.deal[data-stock="plenty"] {
+  --level: var(--good);
+}
+
+.deal[data-stock="some"] {
+  --level: #5f8a1c;
+}
+
+.deal[data-stock="few"] {
+  --level: #c25e00;
+}
+
+.deal[data-stock="gone"] {
+  --level: var(--muted);
+}
+
+.stock,
+.stock-read {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  margin: 0;
 }
 
 .stock-label {
@@ -687,23 +707,80 @@ button.small {
   font-size: 0.9rem;
 }
 
-.stock button {
-  padding: 0.25rem 0.6rem;
+.meter {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--soft);
+}
+
+.meter button {
+  margin: 0;
+  padding: 0.28rem 0.6rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 0.85rem;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+.meter button + button {
+  border-left: 1px solid var(--line);
+}
+
+.meter button.filled {
+  background: var(--level);
+  color: #fff;
+}
+
+.meter button.filled + button.filled {
+  border-left-color: rgb(255 255 255 / 0.35);
+}
+
+/* the level that was reported, as against the cells it fills */
+.meter button[aria-pressed="true"] {
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.28);
+}
+
+.stock .gone {
+  margin: 0;
+  padding: 0.28rem 0.6rem;
   font-size: 0.85rem;
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
 }
 
-.stock button[aria-pressed="true"] {
-  background: var(--good);
-  border-color: var(--good);
-  color: #fff;
-}
-
-.stock button[data-stock="gone"][aria-pressed="true"] {
+.stock .gone[aria-pressed="true"] {
   background: var(--muted);
   border-color: var(--muted);
+  color: var(--card);
+  font-weight: 700;
+}
+
+/* a guest's bar: the same cells, nothing to press */
+.meter.static {
+  gap: 3px;
+  padding: 3px;
+}
+
+.meter.static i {
+  width: 1.5rem;
+  height: 0.65rem;
+  border-radius: 3px;
+  background: var(--line);
+}
+
+.meter.static i.filled {
+  background: var(--level);
+}
+
+.stock-read .level {
+  font-size: 0.9rem;
+  color: var(--level);
 }
 
 .stock-by {
@@ -1014,8 +1091,9 @@ button.danger {
     gap: 0.25rem;
   }
 
-  .stock button {
-    padding: 0.25rem 0.4rem;
+  .meter button,
+  .stock .gone {
+    padding: 0.28rem 0.45rem;
   }
 }
 
@@ -1071,7 +1149,8 @@ button.danger {
   .deal > .deal-head { grid-row: 1; flex-direction: column; }
   .deal > .prices { grid-row: 2; }
   .deal > .meta { grid-row: 3; }
-  .deal > .stock { grid-row: 4; }
+  .deal > .stock,
+  .deal > .stock-read { grid-row: 4; }
   .deal > .stock-by { grid-row: 5; }
   .deal > .trust { grid-row: 6; }
   .deal > .history { grid-row: 7; }
@@ -1112,7 +1191,7 @@ button.danger {
 }
 
 /* Where columns leave a card narrow (two on a tablet, three on a small
-   laptop), tighten it so the four stock buttons stay on one line. */
+   laptop), tighten it so the stock bar and sold out stay on one line. */
 @media (min-width: 44rem) and (max-width: 52rem), (min-width: 64rem) and (max-width: 80rem) {
   .deal {
     padding: 0.85rem;
@@ -1122,8 +1201,9 @@ button.danger {
     gap: 0.25rem;
   }
 
-  .stock button {
-    padding: 0.25rem 0.45rem;
+  .meter button,
+  .stock .gone {
+    padding: 0.28rem 0.45rem;
   }
 }
 

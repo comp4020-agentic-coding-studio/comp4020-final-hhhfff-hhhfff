@@ -189,13 +189,23 @@
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
         <p class="meta"></p>
+        <!-- how much is left: a bar filled from the left like a battery; the
+             three levels report it, sold out sits apart -->
         <div class="stock" role="group">
           <span class="stock-label">Left:</span>
-          <button type="button" data-stock="plenty">Plenty</button>
-          <button type="button" data-stock="some">Some</button>
-          <button type="button" data-stock="few">A few</button>
-          <button type="button" data-stock="gone">Sold out</button>
+          <span class="meter">
+            <button type="button" data-stock="few">A few</button>
+            <button type="button" data-stock="some">Some</button>
+            <button type="button" data-stock="plenty">Plenty</button>
+          </span>
+          <button type="button" data-stock="gone" class="gone">Sold out</button>
         </div>
+        <!-- a guest's read-only version: the same bar, no buttons to be refused -->
+        <p class="stock-read" hidden>
+          <span class="stock-label">Left:</span>
+          <span class="meter static" aria-hidden="true"><i></i><i></i><i></i></span>
+          <b class="level"></b>
+        </p>
         <p class="stock-by hint"></p>
         <p class="trust">
           <span class="confirmed"></span>
