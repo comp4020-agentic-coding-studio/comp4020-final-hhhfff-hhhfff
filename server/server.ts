@@ -15,6 +15,7 @@ import {
   dealKey,
   deleteDeal,
   endSession,
+  feedVersion,
   fieldValue,
   getDeal,
   listComments,
@@ -97,11 +98,12 @@ const KIND_WORDS: Record<Store["kind"], string> = {
   asian: "asian grocery grocer",
   convenience: "convenience store",
 };
-const storeText = (s: Store | undefined) => (s ? `${s.name} ${s.where} ${KIND_WORDS[s.kind]}` : "");
+// each store's name, suburb and kind, normalised once for search
+const STORE_KEYS = new Map(STORES.map((s) => [s.id, itemKey(`${s.name} ${s.where} ${KIND_WORDS[s.kind]}`)]));
 
 type Ranked = DealKey & { score: number; typo: boolean };
 const rank = (d: DealKey, terms: string[] | null): Ranked =>
-  terms ? { ...d, ...searchScore(terms, d.item, storeText(storeById.get(d.storeId))) } : { ...d, score: 0, typo: false };
+  terms ? { ...d, ...searchScore(terms, d.itemKey, STORE_KEYS.get(d.storeId) ?? "") } : { ...d, score: 0, typo: false };
 // negative when a comes first in the feed
 const feedOrder = (a: Ranked, b: Ranked) =>
   Number(a.gone) - Number(b.gone) || b.score - a.score || b.createdAt.localeCompare(a.createdAt) || b.id - a.id;
@@ -131,10 +133,26 @@ interface Slice {
   per: number;
 }
 
-function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {
-  const terms = query === null ? null : searchTerms(query);
-  if (terms && !terms.length) return { deals: [], total: 0 };
-  let found = activeDealKeys(store, todayInCanberra()).map((d) => rank(d, terms));
+// The sorted (and, for a search, scored) list for one store and search, kept
+// until the feed changes or the day turns, so everyone reading page one shares
+// one sort instead of each doing it again. At most LIST_CACHE_MAX lists are
+// kept, the oldest dropped first; nobody's typing can grow it further.
+const LIST_CACHE_MAX = 50;
+const listCache = new Map<string, Ranked[]>();
+let listCacheFor = "";
+
+function rankedList(store: string | null, terms: string[] | null): Ranked[] {
+  const today = todayInCanberra();
+  const stamp = `${feedVersion()}|${today}`;
+  if (stamp !== listCacheFor) {
+    listCache.clear();
+    listCacheFor = stamp;
+  }
+  const key = `${store ?? ""}|${terms?.join(" ") ?? ""}`;
+  const kept = listCache.get(key);
+  if (kept) return kept;
+
+  let found = activeDealKeys(store, today).map((d) => rank(d, terms));
   if (terms) {
     found = found.filter((d) => d.score > 0);
     // a near-miss spelling is a fallback: shown only when nothing matches as typed
@@ -142,6 +160,15 @@ function feedPage(store: string | null, query: string | null, slice: Slice): { d
     if (exact.length) found = exact;
   }
   found.sort(feedOrder);
+  if (listCache.size >= LIST_CACHE_MAX) listCache.delete(listCache.keys().next().value!);
+  listCache.set(key, found);
+  return found;
+}
+
+function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {
+  const terms = query === null ? null : searchTerms(query);
+  if (terms && !terms.length) return { deals: [], total: 0 };
+  let found = rankedList(store, terms); // shared: filter and slice it, never change it
   const total = found.length;
   const { after, page, per } = slice;
   if (after !== null) {
@@ -426,7 +453,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         { existing },
       );
     }
-    broadcast({ type: "deal", id: result.created.id });
+    broadcast({ type: "new", id: result.created.id });
     return send(res, 201, result.created);
   }
 

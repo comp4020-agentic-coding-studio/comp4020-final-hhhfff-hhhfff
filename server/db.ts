@@ -333,12 +333,13 @@ export interface DealKey {
   id: number;
   storeId: string;
   item: string;
+  itemKey: string; // the item normalised, as stored, so a search needn't redo it
   createdAt: string;
   gone: boolean;
 }
 
 const selectKeys = `
-  SELECT d.id, d.store_id, d.item, d.created_at, s.stock = 'gone' AS gone
+  SELECT d.id, d.store_id, d.item, d.item_key, d.created_at, s.stock = 'gone' AS gone
   FROM deals d
   JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
 `;
@@ -347,16 +348,29 @@ const toKey = (r: Row): DealKey => ({
   id: r.id as number,
   storeId: r.store_id as string,
   item: r.item as string,
+  itemKey: r.item_key as string,
   createdAt: r.created_at as string,
   gone: !!r.gone,
 });
 
+// Every write that can change the feed's order or membership (a post, a
+// delete, a stock report, an applied correction) moves this on, so what is
+// worked out from the feed can be kept until it does.
+let version = 0;
+export const feedVersion = (): number => version;
+const feedChanged = () => void version++;
+
+let keysCache: { version: number; since: string; keys: DealKey[] } | null = null;
+
 // Deals that ended before `sinceEndsOn` (a YYYY-MM-DD date) drop out of the
 // feed; they stay in the database.
+// Read once per change and per day, then answered from memory.
 export function activeDealKeys(storeId: string | null, sinceEndsOn: string): DealKey[] {
-  const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
-  const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
-  return (db.prepare(`${selectKeys} ${where}`).all(...args) as Row[]).map(toKey);
+  if (keysCache?.version !== version || keysCache.since !== sinceEndsOn) {
+    const keys = (db.prepare(`${selectKeys} WHERE ${active}`).all(sinceEndsOn) as Row[]).map(toKey);
+    keysCache = { version, since: sinceEndsOn, keys };
+  }
+  return storeId ? keysCache.keys.filter((k) => k.storeId === storeId) : keysCache.keys;
 }
 
 // One deal's key, even if it has since ended or been deleted: a page that
@@ -426,11 +440,14 @@ export function createDeal(d: NewDeal, today: string): { created: Deal } | { exi
     ).run(lastInsertRowid, d.stock, d.author.id, d.author.name, at);
     return Number(lastInsertRowid);
   });
-  return typeof id === "number" ? { created: getDeal(id)! } : { existing: id };
+  if (typeof id !== "number") return { existing: id };
+  feedChanged();
+  return { created: getDeal(id)! };
 }
 
 export function deleteDeal(id: number): void {
   db.prepare(`UPDATE deals SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now(), id);
+  feedChanged();
 }
 
 // One person may report a deal's stock once per STOCK_COOLDOWN_MS, so nobody
@@ -512,6 +529,7 @@ export function reportStock(dealId: number, stock: Stock, author: Author): void 
   db.prepare(
     `INSERT INTO stock_reports (deal_id, stock, author_id, author_name, created_at) VALUES (?, ?, ?, ?, ?)`,
   ).run(dealId, stock, author.id, author.name, now());
+  feedChanged(); // sold out moves a post to the end
 }
 
 // Returns false if this person had already confirmed it.
@@ -585,6 +603,7 @@ export function proposeCorrection(
     const extra = field === "item" ? `, item_key = ?` : "";
     const args: (string | number | null)[] = field === "item" ? [value, itemKey(String(value))] : [value];
     db.prepare(`UPDATE deals SET ${COLUMN[field]} = ?${extra} WHERE id = ?`).run(...args, dealId);
+    feedChanged(); // an item name or end date changes what's found and what's live
     // this proposal is the applied one; every other open one for the field is settled by it
     db.prepare(
       `UPDATE corrections SET applied_at = ?, previous = ?, applied_by = ?, resolved_at = ? WHERE id = ?`,

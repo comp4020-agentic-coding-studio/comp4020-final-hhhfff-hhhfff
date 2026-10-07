@@ -83,6 +83,17 @@ describe.skipIf(!writes)("searching the specials", async () => {
     expect(await search(`${tag} coles`)).toEqual([timTams, oatMilk]);
   });
 
+  // The server keeps sorted lists until the feed changes; a renamed item must
+  // be found by its new name at once, not when the cache happens to clear.
+  it("finds a post by its new name as soon as a correction renames it", async () => {
+    const id = await post("Instant ramen", "aldi-civic");
+    expect(await search(`ramen ${tag}`)).toEqual([id]);
+    const renamed = await call(`/api/deals/${id}/corrections`, { field: "item", value: `Udon soup ${tag}`, author: poster.as });
+    expect(renamed.data.applied).toBe(true); // the poster's own correction applies at once
+    expect(await search(`udon ${tag}`)).toEqual([id]);
+    expect(await search(`ramen ${tag}`)).toEqual([]);
+  });
+
   it("works with the store filter, and leaves deleted posts out", async () => {
     expect(new Set(await search(tag, "coles-civic"))).toEqual(new Set([timTams, oatMilk]));
     const gone = await post("Instant noodles", "coles-civic");

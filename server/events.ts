@@ -6,7 +6,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 // and a guest can listen like anyone else.
 
 export type LiveEvent =
-  | { type: "deal"; id: number } // posted or changed: stock, confirmation, correction, comment
+  | { type: "new"; id: number } // just posted: only pages on page one need to look again
+  | { type: "deal"; id: number } // changed: stock, confirmation, correction, comment
   | { type: "deleted"; id: number }
   | { type: "notice" }; // sent only to the poster it concerns
 

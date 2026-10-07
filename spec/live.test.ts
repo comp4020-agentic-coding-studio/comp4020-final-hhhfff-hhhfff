@@ -59,8 +59,10 @@ describe.skipIf(!writes)("live updates", () => {
     try {
       expect(guest.type).toContain("text/event-stream");
 
+      // a new post says so ("new"), so only pages showing page one look again;
+      // a change to an existing one is "deal"
       const { data: deal } = await call("/api/deals", special(poster));
-      await guest.until((e) => e.type === "deal" && e.id === deal.id);
+      await guest.until((e) => e.type === "new" && e.id === deal.id);
 
       for (const [path, body] of [
         [`/api/deals/${deal.id}/stock`, { stock: "few" }],

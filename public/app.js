@@ -1077,7 +1077,21 @@ function connectLive() {
 function onLive(ev) {
   if (ev.type === "notice") loadNotices();
   else if (ev.type === "deleted") removeCard(ev.id);
+  else if (ev.type === "new" && page === 1) reloadSoon(); // whether it fits this store and search is the server's call
   else if (ev.type === "deal") refreshDeal(ev.id);
+}
+
+// Every open page hears every event at once. A page that has to ask the server
+// again waits a random moment first (and asks once however many events came),
+// so a busy minute doesn't send every reader's request in the same instant.
+const SPREAD_MS = 2000;
+let reloadTimer = null;
+function reloadSoon() {
+  if (reloadTimer) return;
+  reloadTimer = setTimeout(() => {
+    reloadTimer = null;
+    loadFeed();
+  }, Math.random() * SPREAD_MS);
 }
 
 function removeCard(id) {
@@ -1086,7 +1100,7 @@ function removeCard(id) {
   if (!card) return; // on another page
   card.remove();
   deals = deals.filter((x) => x.id !== id);
-  loadFeed(); // the next post moves up to fill the page, and the count drops
+  reloadSoon(); // the next post moves up to fill the page, and the count drops
 }
 
 // Someone is mid-way through something on this card: don't pull it out from under them.
@@ -1095,7 +1109,10 @@ const busy = (card) =>
   !!card.querySelector(".delete-confirm:not([hidden])") ||
   [...card.querySelectorAll("details[open] input, details[open] textarea")].some((i) => i.value);
 
+// A change to a post on this page: fetch it and swap its card. One on another
+// page isn't fetched at all; it'll be current when that page is opened.
 async function refreshDeal(id) {
+  if (!document.getElementById(`deal-${id}`)) return;
   let d;
   try {
     d = await api(`/api/deals/${id}`);
@@ -1104,13 +1121,7 @@ async function refreshDeal(id) {
     return;
   }
   const card = document.getElementById(`deal-${id}`);
-  if (!card) {
-    // Not on this page. A brand-new post belongs on top of page one, if the
-    // server says it fits the store and search: ask it again. Anything else
-    // stays on its own page rather than shifting this one under the reader.
-    if (page === 1 && Date.now() - Date.parse(d.createdAt) < 60_000) loadFeed();
-    return;
-  }
+  if (!card) return; // gone from the page while it was fetched
   deals = deals.map((x) => (x.id === id ? d : x));
   if (busy(card)) return; // the data is kept; the card catches up on the next render
   if (card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves

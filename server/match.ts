@@ -99,10 +99,10 @@ function termScore(term: string, key: string): number {
 // score 0 unless every search word matches the item or the store; otherwise
 // higher for closer matches, and an item match counts a little more than a
 // store one. `typo` says some word only matched as a slip, so the caller can
-// leave such matches out when others need no such charity.
-export function searchScore(terms: string[], item: string, store: string): { score: number; typo: boolean } {
-  const itemK = itemKey(item);
-  const storeK = itemKey(store);
+// leave such matches out when others need no such charity. Both texts come
+// already through itemKey (the item's is stored), so a search over every
+// deal doesn't normalise each one again.
+export function searchScore(terms: string[], itemK: string, storeK: string): { score: number; typo: boolean } {
   let score = 0;
   let typo = false;
   for (const t of terms) {
