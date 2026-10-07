@@ -1158,7 +1158,9 @@ function connectLive() {
   });
 }
 
-// --- the store map: each store where it is, its dot sized by live specials
+// --- the store map: real streets (public/streets.json, built once from
+// OpenStreetMap by scripts/streets.ts), each store a dot sized by its live
+// specials. Drag to pan; wheel, pinch, double-click or the buttons to zoom.
 
 const SVG = "http://www.w3.org/2000/svg";
 const AREAS = [
@@ -1170,9 +1172,14 @@ const AREAS = [
   { name: "Dickson", lat: -35.2512, lon: 149.1452 },
   { name: "Lyneham", lat: -35.2495, lon: 149.1235 },
 ];
-// drawn at about a phone's width, so a dot is a finger's size there
-const mapWidth = 360;
-const mapPad = 30;
+// drawn bottom to top; roads get a darker casing under their fill
+const MAP_LAYERS = ["water", "green", "buildings", "path", "service", "minor", "mid", "major"];
+const CASED = new Set(["service", "minor", "mid", "major"]);
+
+let streets = null; // the street map, once loaded
+let streetsLoading = null;
+// what's in view: the map units at the frame's top-left corner, and map units per screen pixel
+const view = { x: 0, y: 0, u: 1, placed: false };
 
 function svgEl(name, attrs = {}) {
   const el = document.createElementNS(SVG, name);
@@ -1180,37 +1187,212 @@ function svgEl(name, attrs = {}) {
   return el;
 }
 
-function drawMap() {
+const mapAt = (p) => {
+  const cos = Math.cos((streets.latRef * Math.PI) / 180);
+  return { x: (p.lon - streets.box.west) * cos * streets.scale, y: (streets.box.north - p.lat) * streets.scale };
+};
+
+function loadStreets() {
+  streetsLoading ??= fetch("/streets.json")
+    .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
+    .then((data) => {
+      streets = data;
+      drawStreets();
+    })
+    .catch(() => {
+      streetsLoading = null; // a later open tries again
+      $("#map-status").textContent = "The street map didn't load. Try closing and opening it again.";
+    });
+  return streetsLoading;
+}
+
+// The streets are drawn once; only the view and the store dots change after.
+function drawStreets() {
   const svg = $("#map-svg");
-  const all = [...stores, ANU];
-  const lonScale = Math.cos((ANU.lat * Math.PI) / 180);
-  const [minX, maxX] = [Math.min(...all.map((p) => p.lon)), Math.max(...all.map((p) => p.lon))];
-  const [minY, maxY] = [Math.min(...all.map((p) => -p.lat)), Math.max(...all.map((p) => -p.lat))];
-  const scale = (mapWidth - 2 * mapPad) / ((maxX - minX) * lonScale);
-  const height = Math.round((maxY - minY) * scale + 2 * mapPad);
-  const at = (p) => ({ x: mapPad + (p.lon - minX) * lonScale * scale, y: mapPad + (-p.lat - minY) * scale });
-  svg.setAttribute("viewBox", `0 0 ${mapWidth} ${height}`);
-
-  const areas = AREAS.map((a) => {
-    const { x, y } = at(a);
-    const half = a.name.length * 4.5;
-    const t = svgEl("text", { x: Math.min(Math.max(x, half + 4), mapWidth - half - 4), y: Math.max(y, 14), class: "map-area", "text-anchor": "middle" });
-    t.textContent = a.name;
-    return t;
+  const base = svgEl("g", { class: "map-base" });
+  base.append(svgEl("rect", { class: "map-ground", width: streets.width, height: streets.height }));
+  for (const layer of MAP_LAYERS) {
+    const d = streets.layers[layer];
+    if (!d) continue;
+    if (CASED.has(layer)) base.append(svgEl("path", { d, class: `map-${layer} casing` }));
+    base.append(svgEl("path", { d, class: `map-${layer}` }));
+  }
+  const defs = svgEl("defs");
+  const labels = svgEl("g", { class: "map-labels" });
+  streets.labels.forEach((l, i) => {
+    defs.append(svgEl("path", { id: `road-${i}`, d: l.d }));
+    const t = svgEl("text", { "data-rank": l.rank, dy: "0.35em" });
+    const along = svgEl("textPath", { href: `#road-${i}`, startOffset: "50%", "text-anchor": "middle" });
+    along.textContent = l.name;
+    t.append(along);
+    labels.append(t);
   });
+  const areas = svgEl("g", { class: "map-areas" });
+  for (const a of AREAS) {
+    const t = svgEl("text", { "text-anchor": "middle", "data-x": mapAt(a).x, "data-y": mapAt(a).y });
+    t.textContent = a.name;
+    areas.append(t);
+  }
+  svg.replaceChildren(defs, base, labels, areas, svgEl("g", { class: "map-pins" }));
+  // a road's label shows only when the road is long enough on screen to hold it
+  for (const [i, t] of [...labels.children].entries()) {
+    t.dataset.len = String(defs.children[i].getTotalLength());
+    t.dataset.wants = String(streets.labels[i].name.length * 6.4);
+  }
+  $("#map-status").textContent = "";
+  if (!view.placed) fitStores();
+  drawMap();
+}
 
-  const anu = at(ANU);
-  const home = svgEl("g", { class: "map-anu", transform: `translate(${anu.x} ${anu.y})` });
-  const anuLabel = svgEl("text", { y: -10, "text-anchor": "middle" });
+// The first view frames ANU and every store, as close as fits.
+function fitStores() {
+  const svg = $("#map-svg");
+  const pts = [ANU, ...stores].map(mapAt);
+  const [x0, x1] = [Math.min(...pts.map((p) => p.x)), Math.max(...pts.map((p) => p.x))];
+  const [y0, y1] = [Math.min(...pts.map((p) => p.y)), Math.max(...pts.map((p) => p.y))];
+  const [w, h] = [svg.clientWidth || 360, svg.clientHeight || 400];
+  const pad = 28;
+  view.u = Math.max((x1 - x0) / (w - 2 * pad), (y1 - y0) / (h - 2 * pad));
+  view.x = (x0 + x1) / 2 - (w / 2) * view.u;
+  view.y = (y0 + y1) / 2 - (h / 2) * view.u;
+  view.placed = true;
+}
+
+// Keeps the zoom between "the whole map fits" and street level, and the map in view.
+function clampView() {
+  const svg = $("#map-svg");
+  const [w, h] = [svg.clientWidth || 360, svg.clientHeight || 400];
+  const most = Math.max(streets.width / w, streets.height / h);
+  const centre = { x: view.x + (w / 2) * view.u, y: view.y + (h / 2) * view.u };
+  view.u = Math.min(Math.max(view.u, 0.12), most);
+  const fit = (c, size, span) => (span * view.u >= size ? size / 2 : Math.min(Math.max(c, (span / 2) * view.u), size - (span / 2) * view.u));
+  view.x = fit(centre.x, streets.width, w) - (w / 2) * view.u;
+  view.y = fit(centre.y, streets.height, h) - (h / 2) * view.u;
+}
+
+function zoomAt(px, py, factor) {
+  const [ux, uy] = [view.x + px * view.u, view.y + py * view.u];
+  view.u /= factor;
+  view.x = ux - px * view.u;
+  view.y = uy - py * view.u;
+  placeView();
+}
+
+// Sets the view box, and keeps text, lines and dots their size on screen
+// (roads widen to their real width when zoomed in close).
+function placeView() {
+  if (!streets) return;
+  clampView();
+  const svg = $("#map-svg");
+  const [w, h] = [svg.clientWidth, svg.clientHeight];
+  svg.setAttribute("viewBox", `${view.x} ${view.y} ${w * view.u} ${h * view.u}`);
+  svg.style.setProperty("--u", String(view.u));
+  const ppu = 1 / view.u;
+  for (const t of $(".map-labels", svg).children) {
+    const room = Number(t.dataset.len) * ppu >= Number(t.dataset.wants) + 24;
+    t.toggleAttribute("hidden", !room || (t.dataset.rank === "2" && ppu < 0.9));
+  }
+  for (const t of $(".map-areas", svg).children) t.setAttribute("transform", `translate(${t.dataset.x} ${t.dataset.y}) scale(${view.u})`);
+  placePins();
+}
+
+let pins = [];
+
+function drawMap() {
+  if (!streets) return void loadStreets();
+  const svg = $("#map-svg");
+  const chosen = $("#store-filter").value;
+  const anu = svgEl("g", { class: "map-anu", "data-x": mapAt(ANU).x, "data-y": mapAt(ANU).y });
+  const anuLabel = svgEl("text", { y: -11, "text-anchor": "middle" });
   anuLabel.textContent = "ANU";
-  home.append(svgEl("rect", { x: -5, y: -5, width: 10, height: 10, rx: 2, transform: "rotate(45)" }), anuLabel);
+  anu.append(svgEl("rect", { x: -6, y: -6, width: 12, height: 12, rx: 2, transform: "rotate(45)" }), anuLabel);
 
-  // stores a few doors apart would sit on top of each other: nudge them
-  // apart, and off the ANU marker, which stays put
-  const dots = stores.map((s) => ({ s, ...at(s), r: s.live ? 9 + 3 * Math.sqrt(s.live) : 5.5 }));
-  const fixed = { ...anu, r: 8, fixed: true };
-  for (let round = 0; round < 40; round++) {
-    for (const a of [fixed, ...dots])
+  // fullest drawn last, so it stays on top
+  pins = [...stores]
+    .sort((a, b) => a.live - b.live)
+    .map((s) => {
+      const g = svgEl("g", {
+        class: "map-store",
+        tabindex: 0,
+        role: "button",
+        "data-live": s.live ? "yes" : "no",
+        "aria-pressed": String(s.id === chosen),
+        "data-store": s.id,
+      });
+      const what = `${s.name}, ${s.where}: ${s.live ? `${s.live} live special${s.live === 1 ? "" : "s"}` : "nothing live"}`;
+      g.setAttribute("aria-label", what);
+      const tip = svgEl("title");
+      tip.textContent = what;
+      const r = s.live ? 10 + 3 * Math.sqrt(s.live) : 6;
+      g.append(tip, svgEl("circle", { r }));
+      if (s.live) {
+        const n = svgEl("text", { "text-anchor": "middle", dy: "0.35em" });
+        n.textContent = String(s.live);
+        g.append(n);
+      }
+      return { g, r, at: mapAt(s) };
+    });
+  // redrawing mustn't lose the keyboard's place
+  const focused = svg.contains(document.activeElement) && document.activeElement.dataset.store;
+  $(".map-pins", svg).replaceChildren(anu, ...pins.map((p) => p.g));
+  if (focused) svg.querySelector(`[data-store="${focused}"]`)?.focus();
+  placeView();
+  drawMapList(chosen);
+}
+
+// The list beside the map (wide screens): pressing one picks it, pointing at
+// one lights its dot.
+function drawMapList(chosen) {
+  const live = stores.filter((s) => s.live).sort((a, b) => b.live - a.live || km(origin, a) - km(origin, b));
+  $("#map-list").replaceChildren(
+    ...live.map((s) => {
+      const li = document.createElement("li");
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "quiet";
+      b.dataset.store = s.id;
+      b.setAttribute("aria-pressed", String(s.id === chosen));
+      const name = document.createElement("span");
+      name.textContent = s.name;
+      const where = document.createElement("small");
+      where.textContent = `${s.where} · ${km(origin, s).toFixed(1)} km`;
+      const count = document.createElement("b");
+      count.textContent = String(s.live);
+      count.setAttribute("aria-label", `${s.live} live`);
+      b.append(name, where, count);
+      li.append(b);
+      return li;
+    }),
+  );
+  const rest = stores.length - live.length;
+  $("#map-list-rest").textContent = live.length
+    ? `${rest} other store${rest === 1 ? " has" : "s have"} nothing live right now.`
+    : "Nothing is live at any store right now.";
+}
+
+$("#map-list").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (b) pickFromMap(b.dataset.store);
+});
+for (const [type, on] of [["pointerover", true], ["pointerout", false], ["focusin", true], ["focusout", false]]) {
+  $("#map-list").addEventListener(type, (e) => {
+    const b = e.target.closest("button");
+    if (b) $(`#map-svg [data-store="${b.dataset.store}"]`)?.classList.toggle("lit", on);
+  });
+}
+
+// Dots keep their size on screen, so when zoomed out stores a few doors apart
+// would overlap: nudge them apart on screen (never ANU, which stays put).
+function placePins() {
+  const svg = $("#map-svg");
+  const anu = $(".map-anu", svg);
+  if (!anu) return;
+  const screen = (p) => ({ x: (p.x - view.x) / view.u, y: (p.y - view.y) / view.u });
+  const home = { ...screen(mapAt(ANU)), r: 9, fixed: true };
+  anu.setAttribute("transform", `translate(${mapAt(ANU).x} ${mapAt(ANU).y}) scale(${view.u})`);
+  const dots = pins.map((p) => ({ p, r: p.r, ...screen(p.at) }));
+  for (let round = 0; round < 30; round++) {
+    for (const a of [home, ...dots])
       for (const b of dots) {
         if (a === b) continue;
         const [dx, dy] = [b.x - a.x || 0.01, b.y - a.y];
@@ -1225,42 +1407,11 @@ function drawMap() {
         b.x += dx * push;
         b.y += dy * push;
       }
-    for (const d of dots) {
-      d.x = Math.min(Math.max(d.x, d.r + 2), mapWidth - d.r - 2);
-      d.y = Math.min(Math.max(d.y, d.r + 2), height - d.r - 2);
-    }
   }
-
-  const chosen = $("#store-filter").value;
-  // fullest drawn last, so it stays on top
-  const marks = dots
-    .sort((a, b) => a.s.live - b.s.live)
-    .map(({ s, x, y, r }) => {
-      const g = svgEl("g", {
-        class: "map-store",
-        transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`,
-        tabindex: 0,
-        role: "button",
-        "data-live": s.live ? "yes" : "no",
-        "aria-pressed": String(s.id === chosen),
-        "data-store": s.id,
-      });
-      const what = `${s.name}, ${s.where}: ${s.live ? `${s.live} live special${s.live === 1 ? "" : "s"}` : "nothing live"}`;
-      g.setAttribute("aria-label", what);
-      const tip = svgEl("title");
-      tip.textContent = what;
-      g.append(tip, svgEl("circle", { r }));
-      if (s.live) {
-        const n = svgEl("text", { "text-anchor": "middle", dy: "0.35em" });
-        n.textContent = String(s.live);
-        g.append(n);
-      }
-      return g;
-    });
-  // redrawing mustn't lose the keyboard's place
-  const focused = svg.contains(document.activeElement) && document.activeElement.dataset.store;
-  svg.replaceChildren(...areas, home, ...marks);
-  if (focused) svg.querySelector(`[data-store="${focused}"]`)?.focus();
+  for (const d of dots) {
+    const [x, y] = [view.x + d.x * view.u, view.y + d.y * view.u];
+    d.p.g.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${view.u})`);
+  }
 }
 
 function pickFromMap(id) {
@@ -1269,9 +1420,88 @@ function pickFromMap(id) {
   filter.dispatchEvent(new Event("change"));
 }
 
+// Pointers: one drags the map, two pinch it; a press that barely moved on a
+// dot picks that store.
+const mapPointers = new Map();
+let press = null;
+const local = (e) => {
+  const r = $("#map-svg").getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+};
+
+$("#map-svg").addEventListener("pointerdown", (e) => {
+  if (!streets) return;
+  try {
+    $("#map-svg").setPointerCapture(e.pointerId);
+  } catch {
+    // a pointer the browser no longer tracks: the drag just ends at the frame's edge
+  }
+  mapPointers.set(e.pointerId, local(e));
+  press = mapPointers.size === 1 ? { ...local(e), store: e.target.closest(".map-store")?.dataset.store, moved: false } : null;
+});
+
+$("#map-svg").addEventListener("pointermove", (e) => {
+  if (!mapPointers.has(e.pointerId)) return;
+  const before = [...mapPointers.values()];
+  const now = local(e);
+  if (press && Math.hypot(now.x - press.x, now.y - press.y) > 6) press.moved = true;
+  if (mapPointers.size === 1) {
+    const last = mapPointers.get(e.pointerId);
+    view.x -= (now.x - last.x) * view.u;
+    view.y -= (now.y - last.y) * view.u;
+    mapPointers.set(e.pointerId, now);
+    $("#map-svg").classList.add("dragging");
+    return placeView();
+  }
+  mapPointers.set(e.pointerId, now);
+  const after = [...mapPointers.values()];
+  const mid = (ps) => ({ x: (ps[0].x + ps[1].x) / 2, y: (ps[0].y + ps[1].y) / 2 });
+  const dist = (ps) => Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) || 1;
+  const [m0, m1] = [mid(before), mid(after)];
+  view.x -= (m1.x - m0.x) * view.u;
+  view.y -= (m1.y - m0.y) * view.u;
+  zoomAt(m1.x, m1.y, dist(after) / dist(before));
+});
+
+function endPointer(e) {
+  if (!mapPointers.delete(e.pointerId)) return;
+  $("#map-svg").classList.remove("dragging");
+  if (e.type === "pointerup" && press && !press.moved && press.store) pickFromMap(press.store);
+  press = null;
+}
+$("#map-svg").addEventListener("pointerup", endPointer);
+$("#map-svg").addEventListener("pointercancel", endPointer);
+
+$("#map-svg").addEventListener(
+  "wheel",
+  (e) => {
+    if (!streets) return;
+    e.preventDefault();
+    const { x, y } = local(e);
+    zoomAt(x, y, Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0025)));
+  },
+  { passive: false },
+);
+$("#map-svg").addEventListener("dblclick", (e) => {
+  const { x, y } = local(e);
+  zoomAt(x, y, 2);
+});
+
+const zoomCentre = (factor) => {
+  const svg = $("#map-svg");
+  zoomAt(svg.clientWidth / 2, svg.clientHeight / 2, factor);
+};
+$("#map-in").addEventListener("click", () => zoomCentre(1.6));
+$("#map-out").addEventListener("click", () => zoomCentre(1 / 1.6));
+$("#map-home").addEventListener("click", () => {
+  fitStores();
+  placeView();
+});
+
+// a screen reader's or keyboard's click on a dot (no pointer involved)
 $("#map-svg").addEventListener("click", (e) => {
   const g = e.target.closest(".map-store");
-  if (g) pickFromMap(g.dataset.store);
+  if (g && e.detail === 0) pickFromMap(g.dataset.store);
 });
 $("#map-svg").addEventListener("keydown", (e) => {
   const g = e.target.closest(".map-store");
@@ -1279,6 +1509,7 @@ $("#map-svg").addEventListener("keydown", (e) => {
   e.preventDefault();
   pickFromMap(g.dataset.store);
 });
+new ResizeObserver(() => placeView()).observe($("#map-svg"));
 
 // counts come with the store list; it's fetched again only while the map is open
 let mapRefresh = 0;

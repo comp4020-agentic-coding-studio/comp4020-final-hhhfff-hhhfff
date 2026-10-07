@@ -62,7 +62,7 @@ it with strangers.
   model for crowd-reported prices here.
 - **My friends** pass on cheap food in chat, found by luck.
 
-The shop list comes from OpenStreetMap. Each post records where the poster
+The shop list and the street map come from OpenStreetMap, taken once, not fetched at runtime. Each post records where the poster
 saw it, so readers can weigh it.
 
 I chose not to build email login, password reset, receipt photos,

@@ -62,15 +62,33 @@
         <p class="hint" id="locate-status" aria-live="polite"></p>
       </section>
 
-      <!-- folded until asked for: the stores drawn where they are, sized by live specials;
-           drawn from the store list alone, no map tiles or map service -->
+      <!-- folded until asked for: the stores on real streets, sized by live specials.
+           The streets are public/streets.json, built once from OpenStreetMap; no map
+           tiles or map service at runtime -->
       <section id="store-map" class="card store-map" aria-labelledby="store-map-heading" hidden>
         <div class="store-map-head">
           <h2 id="store-map-heading">Where the specials are</h2>
           <button type="button" id="map-close" class="quiet small">Close</button>
         </div>
-        <svg id="map-svg" role="group" aria-label="Stores near ANU; pick one to show its specials"></svg>
-        <p class="hint">Bigger dot, more live specials. Pick a store to show only its specials; pick it again for all stores.</p>
+        <div class="map-body">
+        <div class="map-frame">
+          <svg id="map-svg" role="group" aria-label="Stores near ANU; pick one to show its specials"></svg>
+          <p id="map-status" class="map-status" aria-live="polite">Loading the map…</p>
+          <div class="map-zoom">
+            <button type="button" id="map-in" aria-label="Zoom in">+</button>
+            <button type="button" id="map-out" aria-label="Zoom out">−</button>
+            <button type="button" id="map-home" aria-label="Show every store">⌂</button>
+          </div>
+          <p class="map-credit">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors</p>
+        </div>
+        <!-- beside the map on a wide screen: the stores with something live, fullest first -->
+        <div class="map-side">
+          <h3>Stores with specials</h3>
+          <ol id="map-list" class="map-list"></ol>
+          <p class="hint" id="map-list-rest"></p>
+        </div>
+        </div>
+        <p class="hint">Bigger dot, more live specials. Drag to move, pinch or scroll to zoom. Pick a store to show only its specials; pick it again for all stores.</p>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->

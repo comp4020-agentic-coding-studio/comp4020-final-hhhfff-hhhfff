@@ -1,3 +1,4 @@
+import { JSDOM } from "jsdom";
 import { expect, inject, it } from "vitest";
 
 // The store map draws real streets from public/streets.json, built once from
@@ -23,4 +24,13 @@ it("the street map is served as data the page can draw, in the stores' own proje
     expect(s.lon).toBeGreaterThan(map.box.west);
     expect(s.lon).toBeLessThan(map.box.east);
   }
+});
+
+it("the page credits OpenStreetMap beside the map, opening off-site safely", async () => {
+  const html = await (await fetch(new URL("/", baseUrl))).text();
+  const document = new JSDOM(html).window.document;
+  const credit = document.querySelector('#store-map a[href="https://www.openstreetmap.org/copyright"]');
+  expect(credit, "no OpenStreetMap credit in #store-map").not.toBeNull();
+  expect(credit!.getAttribute("target")).toBe("_blank");
+  expect(credit!.getAttribute("rel")!.split(" ")).toEqual(expect.arrayContaining(["noopener", "noreferrer"]));
 });
