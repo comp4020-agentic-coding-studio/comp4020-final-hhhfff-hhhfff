@@ -157,15 +157,24 @@ async function loadNotices() {
 // --- the feed
 
 let deals = [];
+let feedRequest = 0; // only the latest request's answer is shown, however they arrive
+
+// what's typed in the search box, tidied; "" when not searching
+const query = () => $("#search").value.trim().replace(/\s+/g, " ");
 
 async function loadFeed() {
-  const store = $("#store-filter").value;
+  const params = new URLSearchParams();
+  if ($("#store-filter").value) params.set("store", $("#store-filter").value);
+  if (query()) params.set("q", query());
   const feed = $("#feed");
   const status = $("#feed-status");
+  const mine = ++feedRequest;
   feed.setAttribute("aria-busy", "true");
-  if (!feed.children.length) status.textContent = "Loading specials…";
+  if (!feed.children.length) status.textContent = query() ? "Searching…" : "Loading specials…";
   try {
-    deals = await api(`/api/deals${store ? `?store=${encodeURIComponent(store)}` : ""}`);
+    const found = await api(`/api/deals${params.size ? `?${params}` : ""}`);
+    if (mine !== feedRequest) return;
+    deals = found;
     renderFeed();
   } catch (err) {
     // on a slow or dropped connection, say so and offer a way back, keeping what's shown
@@ -197,15 +206,25 @@ function renderFeed() {
     ...deals.map((d) => dealCard(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
   const store = byId.get($("#store-filter").value);
-  $("#feed-status").textContent = "";
-  $("#empty-title").textContent = store
-    ? `Nothing shared for ${store.name}, ${store.where} yet`
-    : "No one has shared a special yet";
+  const q = query();
+  const at = store ? ` at ${store.name}, ${store.where}` : "";
+  $("#feed-status").textContent = q && deals.length
+    ? `${deals.length === 1 ? "1 special matches" : `${deals.length} specials match`} “${q}”${at}.`
+    : "";
+  // an empty search isn't an empty feed: say so, and offer the way back
+  $("#empty-title").textContent = q
+    ? `Nothing matches “${q}”${at}`
+    : store ? `Nothing shared for ${store.name}, ${store.where} yet` : "No one has shared a special yet";
+  $("#empty-hint").textContent = q
+    ? "Try fewer words or another spelling, or check the chains' own pages below."
+    : "Spotted a markdown in a shop near ANU? Post it and the next student can walk there for it.";
+  $("#post-first").hidden = !!q;
+  $("#clear-search").hidden = !q;
   showChains();
 }
 
 // With posts, the chains' links are a sidebar; with none, they fill the middle
-// under the empty-feed note. Hidden until the feed first loads.
+// under the empty-feed (or empty-search) note. Hidden until the feed first loads.
 function showChains() {
   const empty = !deals.length;
   $("#chains").hidden = false;
@@ -217,13 +236,70 @@ function showChains() {
 // the same toggle as the post button, so a guest is asked to log in rather than shown a form
 $("#post-first").addEventListener("click", () => toggle.click());
 
+// --- search: typed words go to the server (see searchDeals in server/server.ts),
+// a moment after typing stops. The words stay in the address, so a search can
+// be shared or reloaded.
+
+let searchTimer;
+function searchChanged() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    const url = new URL(location.href);
+    if (query()) url.searchParams.set("q", query());
+    else url.searchParams.delete("q");
+    history.replaceState(null, "", url);
+    loadFeed();
+  }, 200);
+}
+
+function clearSearch() {
+  $("#search").value = "";
+  searchChanged();
+  $("#search").focus();
+}
+
+$("#search").addEventListener("input", searchChanged);
+$("#search").addEventListener("keydown", (e) => e.key === "Escape" && $("#search").value && clearSearch());
+$("#search-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  $("#search").blur(); // a phone's keyboard steps aside to show the results
+});
+$("#clear-search").addEventListener("click", clearSearch);
+
+// Marks where the search words appear in `text`, as text nodes and <mark>s
+// (never HTML). Approximate: the server matches normalised words, this only
+// finds them literally, ignoring case.
+function highlighted(text) {
+  const words = query().toLowerCase().split(/[^\p{L}\p{N}.]+/u).filter((w) => w.length > 1 || /[^\x00-\x7f]/.test(w));
+  if (!words.length) return [text];
+  const lower = text.toLowerCase();
+  const marks = new Array(text.length).fill(false);
+  for (const w of words) {
+    for (let i = lower.indexOf(w); i !== -1; i = lower.indexOf(w, i + 1)) marks.fill(true, i, i + w.length);
+  }
+  const out = [];
+  for (let i = 0; i < text.length;) {
+    let j = i;
+    while (j < text.length && marks[j] === marks[i]) j++;
+    const piece = text.slice(i, j);
+    if (marks[i]) {
+      const m = document.createElement("mark");
+      m.textContent = piece;
+      out.push(m);
+    } else out.push(piece);
+    i = j;
+  }
+  return out;
+}
+
 function dealCard(d, store, commentsOpen, correctOpen) {
   const li = $("#deal-template").content.firstElementChild.cloneNode(true);
   li.dataset.id = d.id;
   li.id = `deal-${d.id}`;
   li.classList.toggle("sold-out", d.stock === "gone");
-  $(".item", li).textContent = d.item;
-  $(".store", li).textContent = store ? `${store.name}, ${store.where} · ${km(origin, store).toFixed(1)} km` : d.storeId;
+  $(".item", li).replaceChildren(...highlighted(d.item));
+  $(".store", li).replaceChildren(...highlighted(store ? `${store.name}, ${store.where}` : d.storeId),
+    store ? ` · ${km(origin, store).toFixed(1)} km` : "");
   $(".now", li).textContent = money(d.nowCents);
   $(".was", li).textContent = money(d.wasCents);
   $(".off", li).textContent = `${Math.round((1 - d.nowCents / d.wasCents) * 100)}% off`;
@@ -883,9 +959,11 @@ async function refreshDeal(id) {
   }
   const filter = $("#store-filter").value;
   if (filter && filter !== d.storeId) return;
+  const card = document.getElementById(`deal-${id}`);
+  // whether a new post matches the search is the server's call: ask it again
+  if (!card && query()) return loadFeed();
   const known = deals.some((x) => x.id === id);
   deals = known ? deals.map((x) => (x.id === id ? d : x)) : [d, ...deals];
-  const card = document.getElementById(`deal-${id}`);
   if (card && busy(card)) return; // the data is kept; the card catches up on the next render
   if (card && card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
   const fresh = dealCard(
@@ -913,6 +991,7 @@ document.addEventListener("visibilitychange", () => {
   loadNotices();
 });
 
+$("#search").value = new URLSearchParams(location.search).get("q") ?? "";
 me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");

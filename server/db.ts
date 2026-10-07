@@ -338,6 +338,24 @@ export function listDeals(storeId: string | null, sinceEndsOn: string): Deal[] {
   return rows.map((r) => toDeal(r as Row));
 }
 
+// Every active deal's id, store and item, in feed order, for search to score
+// before loading the few that match in full.
+export function searchableDeals(
+  storeId: string | null,
+  sinceEndsOn: string,
+): { id: number; storeId: string; item: string; gone: boolean }[] {
+  const where = `WHERE ${active}` + (storeId ? ` AND d.store_id = ?` : "");
+  const args = storeId ? [sinceEndsOn, storeId] : [sinceEndsOn];
+  const rows = db
+    .prepare(
+      `SELECT d.id, d.store_id, d.item, s.stock = 'gone' AS gone FROM deals d
+       JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
+       ${where} ORDER BY s.stock = 'gone', d.created_at DESC`,
+    )
+    .all(...args) as Row[];
+  return rows.map((r) => ({ id: r.id as number, storeId: r.store_id as string, item: r.item as string, gone: !!r.gone }));
+}
+
 // A deleted deal reads as missing, so nothing can be done to it either.
 export function getDeal(id: number): Deal | null {
   const row = db.prepare(`${selectDeals} WHERE d.id = ? AND d.deleted_at IS NULL`).get(id);

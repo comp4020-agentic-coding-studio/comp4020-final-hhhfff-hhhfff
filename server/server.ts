@@ -20,6 +20,7 @@ import {
   liveDuplicate,
   proposeCorrection,
   reportStock,
+  searchableDeals,
   setAdmins,
   similarDeals,
   SOURCES,
@@ -35,8 +36,8 @@ import {
   type Stock,
   type Value,
 } from "./db.ts";
-import { itemKey } from "./match.ts";
-import { STORES, storeById } from "./stores.ts";
+import { itemKey, searchScore, searchTerms } from "./match.ts";
+import { type Store, STORES, storeById } from "./stores.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const MAX_BODY = 8 * 1024;
@@ -78,6 +79,29 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
     throw new HttpError(400, `${field} must be one of: ${allowed.join(", ")}`);
   }
   return v as T;
+}
+
+// --- search. Every active deal's item and store are scored, cheaply; only
+// the best (up to the feed's 200) are loaded in full. Sold-out posts still go
+// after the rest, then closer matches first, then newest.
+
+const SEARCH_MAX = 80;
+const KIND_WORDS: Record<Store["kind"], string> = {
+  supermarket: "supermarket",
+  asian: "asian grocery grocer",
+  convenience: "convenience store",
+};
+const storeText = (s: Store | undefined) => (s ? `${s.name} ${s.where} ${KIND_WORDS[s.kind]}` : "");
+
+function searchDeals(query: string, store: string | null) {
+  const terms = searchTerms(query);
+  if (!terms.length) return [];
+  return searchableDeals(store, todayInCanberra())
+    .map((d) => ({ ...d, score: searchScore(terms, d.item, storeText(storeById.get(d.storeId))) }))
+    .filter((d) => d.score > 0)
+    .sort((a, b) => Number(a.gone) - Number(b.gone) || b.score - a.score)
+    .slice(0, 200)
+    .map((d) => getDeal(d.id)!);
 }
 
 // --- accounts. Who you are comes only from the session cookie, never from the
@@ -309,6 +333,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === "GET" && path === "/api/deals") {
     const store = url.searchParams.get("store");
     if (store && !storeById.has(store)) throw new HttpError(404, "no such store");
+    const q = url.searchParams.get("q")?.trim();
+    if (q) return send(res, 200, searchDeals(str(q, "search", 1, SEARCH_MAX), store));
     return send(res, 200, listDeals(store, todayInCanberra()));
   }
 

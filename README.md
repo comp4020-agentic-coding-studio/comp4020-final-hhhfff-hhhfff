@@ -44,7 +44,8 @@ Enforced, by tests in `spec/` against the running app: duplicate refusal,
 including simultaneous posts; the confirmation and three-person correction
 rules; poster-only delete; the price check; the stock-report limit; guests
 being read-only; logins across browsers; no password or session token
-leaking; and live updates reaching an open page.
+leaking; search finding an item or shop despite a typo; and live updates
+reaching an open page.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;

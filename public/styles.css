@@ -172,6 +172,25 @@ button.small {
   min-width: 0;
 }
 
+/* the search box gets the whole first row; the store list and "Near me" sit under it */
+.filters .search {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.search input {
+  padding: 0.6rem 0.75rem 0.6rem 2.1rem;
+  /* a magnifier, drawn so it needs no file and no icon font */
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23615c50' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E") no-repeat 0.7rem center;
+}
+
+/* where the search words appear on a card */
+.deal mark {
+  background: #fff2c2;
+  color: inherit;
+  border-radius: 2px;
+}
+
 .filters .hint {
   flex-basis: 100%;
   margin: 0;

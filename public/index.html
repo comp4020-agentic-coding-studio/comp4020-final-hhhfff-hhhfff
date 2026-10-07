@@ -46,7 +46,13 @@
         </form>
       </section>
 
-      <section class="filters" aria-label="Which stores">
+      <section class="filters" aria-label="Find specials">
+        <!-- searched on the server, so posts past the feed's first 200 are found too -->
+        <form id="search-form" class="search" role="search">
+          <label for="search" class="visually-hidden">Search specials</label>
+          <input id="search" name="q" type="search" maxlength="80" autocomplete="off" enterkeyhint="search"
+                 placeholder="Search items or shops: milk, dumplings, Daily Market" />
+        </form>
         <label for="store-filter">Showing</label>
         <select id="store-filter"><option value="">Loading stores…</option></select>
         <button type="button" id="locate" class="quiet" title="Sort stores by distance from where you are">Near me</button>
@@ -118,8 +124,9 @@
         <aside id="chains" class="chains" aria-labelledby="chains-heading" hidden>
           <div id="chains-empty" class="chains-empty" hidden>
             <h2 id="empty-title">No one has shared a special yet</h2>
-            <p class="hint">Spotted a markdown in a shop near ANU? Post it and the next student can walk there for it.</p>
+            <p class="hint" id="empty-hint">Spotted a markdown in a shop near ANU? Post it and the next student can walk there for it.</p>
             <button type="button" id="post-first">Post the first one</button>
+            <button type="button" id="clear-search" hidden>Clear the search</button>
           </div>
           <h2 id="chains-heading">The big chains' own specials</h2>
           <p class="hint">Their own pages, not posts here: nobody has checked them on the shelf.</p>

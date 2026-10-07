@@ -46,3 +46,59 @@ export function similarity(a: string, b: string): number {
 
 // At or above this, a deal is shown as "is this the same thing?"
 export const SIMILAR_ENOUGH = 0.5;
+
+// --- search: what a reader types to find an item or a shop.
+
+// The words of a search, normalised like item names, at most eight.
+export function searchTerms(query: string): string[] {
+  return [...new Set(itemKey(query).split(" ").filter(Boolean))].slice(0, 8);
+}
+
+// Edit distance between a and b, or max + 1 once it's sure to exceed max.
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      row[j] = Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    if (Math.min(...row) > max) return max + 1;
+    prev = row;
+  }
+  return prev[b.length];
+}
+
+// How well one search word matches a normalised text: a whole word, the start
+// of one ("dump" while typing "dumplings"), inside one or across a space
+// (Chinese has no spaces; "timtams"), or a slip of a letter or two in a longer
+// word ("dumplngs"). 0 if none.
+function termScore(term: string, key: string): number {
+  const words = key.split(" ");
+  if (words.includes(term)) return 3;
+  if (words.some((w) => w.startsWith(term))) return 2;
+  // a short Latin fragment ("a", "ti") would match nearly everything
+  const inside = term.length >= 3 || /[^\p{Script=Latin}\p{N}.]/u.test(term);
+  if (inside && key.replace(/ /g, "").includes(term)) return 1.5;
+  if (term.length >= 4 && !/\d/.test(term)) {
+    const max = term.length >= 7 ? 2 : 1;
+    const near = (w: string) =>
+      editDistance(term, w, max) <= max || (w.length > term.length && editDistance(term, w.slice(0, term.length), max) <= max);
+    if (words.some(near)) return 1;
+  }
+  return 0;
+}
+
+// 0 unless every search word matches the item or the store; otherwise higher
+// for closer matches, and an item match counts a little more than a store one.
+export function searchScore(terms: string[], item: string, store: string): number {
+  const itemK = itemKey(item);
+  const storeK = itemKey(store);
+  let total = 0;
+  for (const t of terms) {
+    const s = Math.max(termScore(t, itemK), 0.9 * termScore(t, storeK));
+    if (!s) return 0;
+    total += s;
+  }
+  return total;
+}
