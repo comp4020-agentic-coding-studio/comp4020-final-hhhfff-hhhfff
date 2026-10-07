@@ -1,17 +1,46 @@
+/* Colours are named for their job. Dark mode (below) only swaps the values. */
 :root {
+  color-scheme: light dark;
   --ink: #1d1b16;
   --muted: #615c50;
   --paper: #faf7f0;
   --card: #fff;
+  --field: #fff;
   --line: #e2dccd;
-  --accent: #c8102e;
+  --soft: var(--soft); /* a quiet panel inside a card */
+  --tint: var(--tint); /* the yellow of a markdown sticker, and of search marks */
+  --tint-line: var(--tint-line);
+  --accent: #c8102e; /* the red behind white text: header, main buttons */
   --accent-ink: #fff;
+  --accent-text: #c8102e; /* the red as text on the page: prices, errors */
+  --button-bg: #1d1b16;
+  --button-ink: #fff;
   --good: #1f7a3d;
   --focus: #1a5fd0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
   background: var(--paper);
   line-height: 1.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #ece7dc;
+    --muted: #a8a194;
+    --paper: #15130f;
+    --card: #1f1c17;
+    --field: #27231d;
+    --line: #3b362d;
+    --soft: #2b2720;
+    --tint: #4a3f12;
+    --tint-line: #7a6a24;
+    --accent: #b5102a;
+    --accent-text: #ff7a8a;
+    --button-bg: #ece7dc;
+    --button-ink: #15130f;
+    --good: #2f9b55;
+    --focus: #7aa7ff;
+  }
 }
 
 * {
@@ -128,12 +157,12 @@ select {
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--field);
   color: var(--ink);
 }
 
 input[aria-invalid="true"] {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 
 button {
@@ -141,8 +170,8 @@ button {
   border: 0;
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  background: var(--ink);
-  color: #fff;
+  background: var(--button-bg);
+  color: var(--button-ink);
 }
 
 button.quiet {
@@ -181,12 +210,12 @@ button.small {
 .search input {
   padding: 0.6rem 0.75rem 0.6rem 2.1rem;
   /* a magnifier, drawn so it needs no file and no icon font */
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23615c50' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E") no-repeat 0.7rem center;
+  background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23615c50' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='7' cy='7' r='5'/%3E%3Cpath d='m11 11 3.5 3.5'/%3E%3C/svg%3E") no-repeat 0.7rem center;
 }
 
 /* where the search words appear on a card */
 .deal mark {
-  background: #fff2c2;
+  background: var(--tint);
   color: inherit;
   border-radius: 2px;
 }
@@ -254,7 +283,7 @@ button.small {
 }
 
 .error {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -481,8 +510,8 @@ button.small {
 }
 
 .chain-links a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-text);
+  color: var(--accent-text);
 }
 
 .chain-links a::after {
@@ -544,7 +573,7 @@ button.small {
 
 .prices .now {
   font-size: 1.5rem;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .prices .was {
@@ -553,7 +582,7 @@ button.small {
 
 .prices .off {
   display: inline-block;
-  background: #fff2c2;
+  background: var(--tint);
   border-radius: 4px;
   padding: 0 0.35rem;
   font-weight: 600;
@@ -663,8 +692,8 @@ button.small {
 .notice {
   margin: 0 0 0.5rem;
   padding: 0.6rem 0.8rem;
-  background: #fff2c2;
-  border: 1px solid #e6cf7a;
+  background: var(--tint);
+  border: 1px solid var(--tint-line);
   border-radius: 8px;
 }
 
@@ -702,7 +731,7 @@ button.small {
 .pending li {
   padding: 0.35rem 0.5rem;
   margin-bottom: 0.35rem;
-  background: #f3efe4;
+  background: var(--soft);
   border-radius: 6px;
 }
 
@@ -773,7 +802,7 @@ button.small {
 }
 
 .similar-item tr.differs td {
-  background: #fff2c2;
+  background: var(--tint);
   font-weight: 600;
 }
 
@@ -791,7 +820,7 @@ button.small {
 
 .delete-confirm {
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--accent-text);
   border-radius: 6px;
 }
 
@@ -836,7 +865,7 @@ button.danger {
 }
 
 .readme main a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .readme main img {
