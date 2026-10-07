@@ -115,11 +115,11 @@
            with none, they fill the middle under a note that nothing is shared yet -->
       <div id="feed-layout" class="feed-layout">
         <section aria-labelledby="feed-heading">
-          <h2 id="feed-heading" class="visually-hidden">Specials</h2>
+          <h2 id="feed-heading" class="visually-hidden" tabindex="-1">Specials</h2>
           <p class="hint" id="feed-status" aria-live="polite">Loading specials…</p>
           <ol id="feed" class="feed" aria-busy="true"></ol>
-          <!-- the feed adds cards as this nears the screen; the button is for anyone who'd rather ask -->
-          <p id="feed-more" class="feed-more" hidden><button type="button" class="quiet">Show more specials</button></p>
+          <!-- ten specials a page; filled in by the script once it knows how many there are -->
+          <nav id="pager" class="pager" aria-label="Pages of specials" hidden></nav>
         </section>
 
         <!-- links only: nothing is fetched from these sites or copied in -->

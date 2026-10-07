@@ -65,7 +65,8 @@ const toCents = (s) => {
 
 // --- api
 
-async function api(path, body) {
+// The answer and its headers (the feed's total comes in one); most callers want only the answer.
+async function apiResponse(path, body) {
   const res = await fetch(path, body
     ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }
     : undefined);
@@ -73,8 +74,10 @@ async function api(path, body) {
   // the server may know me as someone else now (another tab logged in or out)
   if (res.status === 401 || res.status === 403) syncMe();
   if (!res.ok) throw Object.assign(new Error(data.error ?? `request failed (${res.status})`), { status: res.status, data });
-  return data;
+  return { data, headers: res.headers };
 }
+
+const api = async (path, body) => (await apiResponse(path, body)).data;
 
 // --- stores, sorted by distance from ANU or from the visitor
 
@@ -159,23 +162,38 @@ async function loadNotices() {
 let deals = [];
 let feedRequest = 0; // only the latest request's answer is shown, however they arrive
 
-// The server sends the feed a page at a time (FEED_PAGE in server/server.ts),
-// each carrying on after the last deal already here; a full page means there
-// may be more. The next is fetched when the reader nears the end.
-const FEED_PAGE = 100;
-let serverHasMore = false;
-let lastFromServer; // id of the last deal of the last page, in the server's order (live updates reorder `deals`)
-let fetchingMore = false;
+// Numbered pages of ten. The server sorts and counts (x-total-count); the page
+// asks for one page at a time and keeps the number in the address, so Back
+// returns to it and a link opens on it.
+const PER_PAGE = 10;
+let page = 1;
+let total = 0;
+const lastPage = () => Math.max(1, Math.ceil(total / PER_PAGE));
+const pageFromAddress = () =>
+  Math.min(100_000, Math.max(1, Number.parseInt(new URLSearchParams(location.search).get("page") ?? "1", 10) || 1));
 
 // what's typed in the search box, tidied; "" when not searching
 const query = () => $("#search").value.trim().replace(/\s+/g, " ");
 
-function feedPath(after) {
+function feedPath() {
   const params = new URLSearchParams();
   if ($("#store-filter").value) params.set("store", $("#store-filter").value);
   if (query()) params.set("q", query());
-  if (after) params.set("after", after);
-  return `/api/deals${params.size ? `?${params}` : ""}`;
+  params.set("page", page);
+  params.set("per", PER_PAGE);
+  return `/api/deals?${params}`;
+}
+
+// the search and page into the address; `push` makes a step Back can undo
+function syncAddress(push) {
+  const url = new URL(location.href);
+  if (query()) url.searchParams.set("q", query());
+  else url.searchParams.delete("q");
+  if (page > 1) url.searchParams.set("page", page);
+  else url.searchParams.delete("page");
+  if (url.href === location.href) return;
+  if (push) history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
 }
 
 async function loadFeed() {
@@ -185,11 +203,16 @@ async function loadFeed() {
   feed.setAttribute("aria-busy", "true");
   if (!feed.children.length) status.textContent = query() ? "Searching…" : "Loading specials…";
   try {
-    const found = await api(feedPath());
+    const { data, headers } = await apiResponse(feedPath());
     if (mine !== feedRequest) return;
-    deals = found;
-    serverHasMore = found.length === FEED_PAGE;
-    lastFromServer = found.at(-1)?.id;
+    total = Number(headers.get("x-total-count") ?? data.length);
+    // past the end (posts went, or an old link): the last page there is
+    if (!data.length && page > lastPage()) {
+      page = lastPage();
+      syncAddress(false);
+      return loadFeed();
+    }
+    deals = data;
     renderFeed();
   } catch (err) {
     // on a slow or dropped connection, say so and offer a way back, keeping what's shown
@@ -200,7 +223,7 @@ async function loadFeed() {
     retry.addEventListener("click", loadFeed);
     status.replaceChildren(`Couldn't load specials: ${err.message}. `, retry);
   } finally {
-    feed.setAttribute("aria-busy", "false");
+    if (mine === feedRequest) feed.setAttribute("aria-busy", "false");
   }
 }
 
@@ -212,31 +235,20 @@ function replaceDeal(updated) {
   renderFeed();
 }
 
-// The feed puts cards on the page a screenful or two at a time and adds more
-// as the reader nears the end: laying out all 200 at once held up typing in
-// the search box for a moment on a phone. A re-render of the same list (a live
-// update) keeps as many as were shown; a new search or store starts again.
-const PAGE = 24;
-let shown = PAGE;
-let shownFor = "";
-
 function renderFeed() {
   deals = shelfOrder(deals);
   const byId = storeById();
-  const list = `${$("#store-filter").value}|${query()}`;
-  if (list !== shownFor) [shown, shownFor] = [PAGE, list];
   const keep = (sel) => new Set([...document.querySelectorAll(`#feed ${sel}[open]`)].map((d) => d.closest("li").dataset.id));
   const [openComments, openCorrect] = [keep("details.comments"), keep("details.correct")];
   $("#feed").replaceChildren(
-    ...deals.slice(0, shown).map((d) => cardFor(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
+    ...deals.map((d) => cardFor(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
-  $("#feed-more").hidden = !moreToShow();
-  fillScreen();
+  renderPager();
   const store = byId.get($("#store-filter").value);
   const q = query();
   const at = store ? ` at ${store.name}, ${store.where}` : "";
-  $("#feed-status").textContent = q && deals.length
-    ? `${deals.length === 1 ? "1 special matches" : `${deals.length}${serverHasMore ? "+" : ""} specials match`} “${q}”${at}.`
+  $("#feed-status").textContent = q && total
+    ? `${total === 1 ? "1 special matches" : `${total} specials match`} “${q}”${at}.`
     : "";
   // an empty search isn't an empty feed: say so, and offer the way back
   $("#empty-title").textContent = q
@@ -250,50 +262,78 @@ function renderFeed() {
   showChains();
 }
 
-const moreToShow = () => deals.length > shown || serverHasMore;
+// --- pages: previous, numbers (the first, the last and those either side of
+// this one, with "…" between), next; on a phone, "3 / 12" instead of numbers.
 
-async function showMore() {
-  if (deals.length < shown + PAGE && serverHasMore && !fetchingMore) await fetchMore();
-  if (deals.length <= shown) return;
-  const byId = storeById();
-  $("#feed").append(...deals.slice(shown, shown + PAGE).map((d) => cardFor(d, byId.get(d.storeId), false, false)));
-  shown += PAGE;
-  $("#feed-more").hidden = !moreToShow();
-  fillScreen();
-}
-
-// The next page from the server, for the list on screen (a search or store
-// change meanwhile throws it away). A post that moved since (its stock
-// changed) could come twice; it's kept once.
-async function fetchMore() {
-  const mine = feedRequest;
-  fetchingMore = true;
-  try {
-    const page = await api(feedPath(lastFromServer));
-    if (mine !== feedRequest) return;
-    const have = new Set(deals.map((d) => d.id));
-    deals = [...deals, ...page.filter((d) => !have.has(d.id))];
-    serverHasMore = page.length === FEED_PAGE;
-    lastFromServer = page.at(-1)?.id ?? lastFromServer;
-  } catch {
-    // the button stays, so the reader can ask again
-  } finally {
-    fetchingMore = false;
+function pageNumbers(current, last) {
+  const want = [...new Set([1, current - 1, current, current + 1, last])].filter((n) => n >= 1 && n <= last).sort((a, b) => a - b);
+  const out = [];
+  for (const n of want) {
+    if (out.length && n - out.at(-1) === 2) out.push(n - 1); // a gap of one page shows the page, not "…"
+    else if (out.length && n - out.at(-1) > 2) out.push("…");
+    out.push(n);
   }
+  return out;
 }
 
-// The observer only speaks when the marker comes near; if it is still near
-// after cards went in (a tall screen, a short search), add more next frame.
-const NEAR = 1200;
-function fillScreen() {
-  const more = $("#feed-more");
-  if (!more.hidden && more.getBoundingClientRect().top < innerHeight + NEAR) requestAnimationFrame(showMore);
+function renderPager() {
+  const nav = $("#pager");
+  const last = lastPage();
+  nav.hidden = total <= PER_PAGE;
+  if (nav.hidden) return;
+  const button = (text, to, label) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "quiet";
+    b.textContent = text;
+    if (label) b.setAttribute("aria-label", label);
+    b.disabled = to < 1 || to > last || to === page;
+    b.addEventListener("click", () => goToPage(to));
+    return b;
+  };
+  const numbers = document.createElement("ol");
+  numbers.className = "page-numbers";
+  for (const n of pageNumbers(page, last)) {
+    const li = document.createElement("li");
+    if (n === "…") {
+      li.className = "gap";
+      li.textContent = "…";
+    } else {
+      const b = button(String(n), n, `Page ${n}`);
+      if (n === page) b.setAttribute("aria-current", "page");
+      li.append(b);
+    }
+    numbers.append(li);
+  }
+  const of = document.createElement("span");
+  of.className = "page-of";
+  of.textContent = `${page} / ${last}`;
+  const prev = button("‹ Previous", page - 1);
+  prev.classList.add("prev");
+  const next = button("Next ›", page + 1);
+  next.classList.add("next");
+  const range = document.createElement("p");
+  range.className = "hint page-range";
+  range.textContent = `Specials ${(page - 1) * PER_PAGE + 1}–${Math.min(page * PER_PAGE, total)} of ${total}`;
+  nav.replaceChildren(prev, numbers, of, next, range);
 }
 
-$("#feed-more button").addEventListener("click", showMore);
-// well before the reader reaches the end, so scrolling rarely meets the button
-new IntersectionObserver((seen) => seen.some((e) => e.isIntersecting) && showMore(), { rootMargin: `${NEAR}px 0px` })
-  .observe($("#feed-more"));
+function goToPage(n) {
+  page = n;
+  syncAddress(true);
+  loadFeed();
+  // back to the top of the feed, and tell a screen reader where it is
+  $("#feed-heading").focus({ preventScroll: true });
+  $("#feed-layout").scrollIntoView({ block: "start" });
+}
+
+// Back and Forward step through pages and searches
+addEventListener("popstate", () => {
+  const params = new URLSearchParams(location.search);
+  $("#search").value = params.get("q") ?? "";
+  page = pageFromAddress();
+  loadFeed();
+});
 
 // With posts, the chains' links are a sidebar; with none, they fill the middle
 // under the empty-feed (or empty-search) note. Hidden until the feed first loads.
@@ -316,10 +356,8 @@ let searchTimer;
 function searchChanged() {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    const url = new URL(location.href);
-    if (query()) url.searchParams.set("q", query());
-    else url.searchParams.delete("q");
-    history.replaceState(null, "", url);
+    page = 1; // a new search starts at its first page
+    syncAddress(false);
     loadFeed();
   }, 150);
 }
@@ -503,8 +541,10 @@ function wireDelete(d, li) {
   $(".delete-yes", box).addEventListener("click", async () => {
     try {
       await api(`/api/deals/${d.id}/delete`, {});
+      built.delete(d.id);
       deals = deals.filter((x) => x.id !== d.id);
       renderFeed();
+      await loadFeed(); // the next post moves up to fill the page
       $("#feed-status").textContent = `Deleted “${d.item}”.`;
     } catch (err) {
       alertIn(box, err.message);
@@ -989,7 +1029,13 @@ function replaceOrAdd(deal) {
   if (filter && filter !== deal.storeId) return;
   if (deals.some((x) => x.id === deal.id)) replaceDeal(deal);
   else {
-    deals = [deal, ...deals];
+    // a new post is the newest, so it's on page one: go there to show it
+    if (page !== 1) {
+      page = 1;
+      syncAddress(true);
+    }
+    deals = [deal, ...deals].slice(0, PER_PAGE);
+    total += 1;
     renderFeed();
   }
 }
@@ -1035,11 +1081,12 @@ function onLive(ev) {
 }
 
 function removeCard(id) {
-  deals = deals.filter((x) => x.id !== id);
   built.delete(id);
-  document.getElementById(`deal-${id}`)?.remove();
-  if (!deals.length) renderFeed();
-  else showChains();
+  const card = document.getElementById(`deal-${id}`);
+  if (!card) return; // on another page
+  card.remove();
+  deals = deals.filter((x) => x.id !== id);
+  loadFeed(); // the next post moves up to fill the page, and the count drops
 }
 
 // Someone is mid-way through something on this card: don't pull it out from under them.
@@ -1056,36 +1103,32 @@ async function refreshDeal(id) {
     if (err.status === 404) removeCard(id);
     return;
   }
-  const filter = $("#store-filter").value;
-  if (filter && filter !== d.storeId) return;
   const card = document.getElementById(`deal-${id}`);
-  const known = deals.some((x) => x.id === id);
-  // further down than the feed has shown yet: keep the news for when it gets there
-  if (!card && known) return void (deals = deals.map((x) => (x.id === id ? d : x)));
-  // on a page not fetched yet: it'll come in its place. Only a brand-new post goes on top.
-  if (!card && serverHasMore && Date.now() - Date.parse(d.createdAt) > 60_000) return;
-  // whether a new post matches the search is the server's call: ask it again
-  if (!card && query()) return loadFeed();
-  deals = known ? deals.map((x) => (x.id === id ? d : x)) : [d, ...deals];
-  if (card && busy(card)) return; // the data is kept; the card catches up on the next render
-  if (card && card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
-  const fresh = cardFor(
+  if (!card) {
+    // Not on this page. A brand-new post belongs on top of page one, if the
+    // server says it fits the store and search: ask it again. Anything else
+    // stays on its own page rather than shifting this one under the reader.
+    if (page === 1 && Date.now() - Date.parse(d.createdAt) < 60_000) loadFeed();
+    return;
+  }
+  deals = deals.map((x) => (x.id === id ? d : x));
+  if (busy(card)) return; // the data is kept; the card catches up on the next render
+  if (card.classList.contains("sold-out") !== (d.stock === "gone")) return renderFeed(); // it moves
+  card.replaceWith(cardFor(
     d,
     storeById().get(d.storeId),
-    !!card?.querySelector("details.comments")?.open,
-    !!card?.querySelector("details.correct")?.open,
-  );
-  if (card) card.replaceWith(fresh);
-  else {
-    $("#feed").prepend(fresh);
-    $("#feed-status").textContent = "";
-    showChains();
-  }
+    !!card.querySelector("details.comments")?.open,
+    !!card.querySelector("details.correct")?.open,
+  ));
 }
 
 // --- start
 
-$("#store-filter").addEventListener("change", loadFeed);
+$("#store-filter").addEventListener("change", () => {
+  page = 1;
+  syncAddress(false);
+  loadFeed();
+});
 // coming back to the tab picks up what others posted meanwhile
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
@@ -1095,6 +1138,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 $("#search").value = new URLSearchParams(location.search).get("q") ?? "";
+page = pageFromAddress();
 me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");

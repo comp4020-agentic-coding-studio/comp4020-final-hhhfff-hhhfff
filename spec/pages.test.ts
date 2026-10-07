@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { call, person, special, wholeFeed, writes } from "./api.ts";
+import { baseUrl, call, person, special, wholeFeed, writes } from "./api.ts";
 
-// The feed comes a page at a time, each carrying on after the last deal of the
-// one before (/api/deals?after=ID), so every live post can be reached however
-// many there are; one response once stopped at 200, and the sold-out posts,
-// sorted last, fell off the end. Carrying on after a deal rather than after a
-// count means posts arriving meanwhile don't make a page repeat one.
+// The feed comes a page at a time: numbered pages for the page to show
+// (/api/deals?page=N&per=10, counted by x-total-count), and for reading it all,
+// each page carrying on after the last deal of the one before
+// (/api/deals?after=ID). Every live post can be reached however many there
+// are; one response once stopped at 200, and the sold-out posts, sorted last,
+// fell off the end. Carrying on after a deal rather than after a count means
+// posts arriving meanwhile don't make a page repeat one.
 
 const PAGE = 100; // FEED_PAGE in server/server.ts
 
@@ -45,6 +47,35 @@ describe("the feed in pages", () => {
     }
     expect(ids).toContain(fresh.id);
     expect(ids).toContain(gone.id);
+  });
+
+  // The page shows numbered pages of ten, numbered by the total the server
+  // counts. A made-up word in every item keeps other spec files' posts out.
+  it.skipIf(!writes)("gives numbered pages of ten, with the total to number them by", async () => {
+    const poster = await person("spec numbered");
+    const tag = `pg${crypto.randomUUID().replace(/[^a-f]/g, "").slice(0, 8)}x`;
+    const posted: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await call("/api/deals", special(poster, { item: `Page test ${i} ${tag}` }));
+      expect(res.status).toBe(201);
+      posted.push(res.data.id);
+    }
+    const pageOf = async (n: number) => {
+      const res = await fetch(new URL(`/api/deals?q=${tag}&per=10&page=${n}`, baseUrl));
+      expect(res.status).toBe(200);
+      return { total: res.headers.get("x-total-count"), ids: (await res.json()).map((d: any) => d.id) as number[] };
+    };
+    const [one, two, three] = [await pageOf(1), await pageOf(2), await pageOf(3)];
+    expect([one.total, two.total, three.total]).toEqual(["12", "12", "12"]);
+    expect([one.ids.length, two.ids.length, three.ids.length]).toEqual([10, 2, 0]);
+    expect(new Set([...one.ids, ...two.ids])).toEqual(new Set(posted));
+    expect(one.ids[0]).toBe(posted.at(-1)); // newest first
+  });
+
+  it("refuses a page or page size out of range, or a page with a cursor", async () => {
+    for (const bad of ["page=0", "page=-2", "page=x", "per=0", "per=101", "per=1.5", "page=2&after=1"]) {
+      expect((await call(`/api/deals?${bad}`)).status, bad).toBe(400);
+    }
   });
 
   it.skipIf(!writes)("doesn't repeat a deal when someone posts between pages", async () => {

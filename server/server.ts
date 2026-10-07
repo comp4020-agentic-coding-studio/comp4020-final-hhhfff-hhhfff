@@ -85,11 +85,12 @@ function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: strin
 // --- the feed and search. Every active deal's sort key (and, for a search,
 // its item and store) is read and ordered, cheaply; only one page is loaded in
 // full. Order: sold-out posts after the rest, then closer matches (for a
-// search), then newest, then id. A page carries on after the last deal the
-// reader has (`after`), so posts arriving or leaving meanwhile neither repeat
-// nor skip one.
+// search), then newest, then id. The page asks for numbered pages of ten
+// (`page`, `per`) and numbers them by the x-total-count header; reading the
+// whole feed carries on after the last deal read (`after`), so posts arriving
+// or leaving meanwhile neither repeat nor skip one.
 
-const FEED_PAGE = 100;
+const FEED_PAGE = 100; // the most one request returns, and the default
 const SEARCH_MAX = 80;
 const KIND_WORDS: Record<Store["kind"], string> = {
   supermarket: "supermarket",
@@ -112,9 +113,27 @@ function afterId(v: string | null): number | null {
   return Number(v);
 }
 
-function feedPage(store: string | null, query: string | null, after: number | null) {
+// A whole number from the address within [min, max], or `fallback` if absent.
+function wholeParam(v: string | null, field: string, min: number, max: number, fallback: number): number {
+  if (v === null) return fallback;
+  if (!/^\d{1,6}$/.test(v) || Number(v) < min || Number(v) > max) {
+    throw new HttpError(400, `${field} must be a whole number from ${min} to ${max}`);
+  }
+  return Number(v);
+}
+
+// Which slice of the feed: numbered pages of `per` (what the page shows, with
+// the total to number them by), or the `per` deals after a given one (stable
+// for reading the whole feed while others post). Not both.
+interface Slice {
+  after: number | null;
+  page: number;
+  per: number;
+}
+
+function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {
   const terms = query === null ? null : searchTerms(query);
-  if (terms && !terms.length) return [];
+  if (terms && !terms.length) return { deals: [], total: 0 };
   let found = activeDealKeys(store, todayInCanberra()).map((d) => rank(d, terms));
   if (terms) {
     found = found.filter((d) => d.score > 0);
@@ -123,13 +142,15 @@ function feedPage(store: string | null, query: string | null, after: number | nu
     if (exact.length) found = exact;
   }
   found.sort(feedOrder);
+  const total = found.length;
+  const { after, page, per } = slice;
   if (after !== null) {
     const last = dealKey(after);
     if (!last) throw new HttpError(400, "after must be a deal id");
     const mark = rank(last, terms);
     found = found.filter((d) => feedOrder(mark, d) < 0);
-  }
-  return found.slice(0, FEED_PAGE).map((d) => getDeal(d.id)!);
+  } else found = found.slice((page - 1) * per);
+  return { deals: found.slice(0, per).map((d) => getDeal(d.id)!), total };
 }
 
 // --- accounts. Who you are comes only from the session cookie, never from the
@@ -361,9 +382,13 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === "GET" && path === "/api/deals") {
     const store = url.searchParams.get("store");
     if (store && !storeById.has(store)) throw new HttpError(404, "no such store");
-    const after = afterId(url.searchParams.get("after"));
-    const q = url.searchParams.get("q")?.trim();
-    return send(res, 200, feedPage(store, q ? str(q, "search", 1, SEARCH_MAX) : null, after));
+    const p = url.searchParams;
+    const after = afterId(p.get("after"));
+    if (after !== null && p.has("page")) throw new HttpError(400, "ask for a page or for the deals after one, not both");
+    const slice = { after, page: wholeParam(p.get("page"), "page", 1, 100_000, 1), per: wholeParam(p.get("per"), "per", 1, FEED_PAGE, FEED_PAGE) };
+    const q = p.get("q")?.trim();
+    const { deals, total } = feedPage(store, q ? str(q, "search", 1, SEARCH_MAX) : null, slice);
+    return send(res, 200, deals, { "x-total-count": String(total) });
   }
 
   if (method === "POST" && path === "/api/deals") {

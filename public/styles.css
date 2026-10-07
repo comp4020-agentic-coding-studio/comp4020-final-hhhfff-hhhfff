@@ -323,10 +323,84 @@ button.small {
   margin: 0;
 }
 
-/* under a feed that has more to add; it pulls the feed's bottom margin back up */
-.feed-more {
-  margin: -2rem 0 3rem;
+/* while another page loads, the one on screen steps back */
+.feed[aria-busy="true"] {
+  opacity: 0.6;
+  transition: opacity 0.15s 0.1s;
+}
+
+/* Under the feed, pulling its bottom margin back up: previous, the page
+   numbers, next, and which specials these are. A phone gets "3 / 12" in
+   place of the numbers. */
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: -1.75rem 0 3rem;
+}
+
+.pager button {
+  min-width: 2.5rem;
+  padding: 0.45rem 0.7rem;
+  margin: 0;
+}
+
+.pager button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pager button[aria-current="page"] {
+  opacity: 1;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 0.3rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.page-numbers .gap {
+  align-self: center;
+  padding: 0 0.15rem;
+  color: var(--muted);
+}
+
+.page-of {
+  display: none;
+  min-width: 4.5rem;
   text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-range {
+  flex-basis: 100%;
+  margin: 0.2rem 0 0;
+  text-align: center;
+}
+
+@media (max-width: 30rem) {
+  .page-numbers {
+    display: none;
+  }
+
+  .page-of {
+    display: inline-block;
+  }
+
+  .pager .prev,
+  .pager .next {
+    flex: 1 1 0;
+  }
 }
 
 /* the chains' own specials pages: a card under the feed on a phone, a
