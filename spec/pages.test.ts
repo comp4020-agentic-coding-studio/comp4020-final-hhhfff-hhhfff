@@ -12,12 +12,22 @@ import { baseUrl, call, person, special, wholeFeed, writes } from "./api.ts";
 const PAGE = 100; // FEED_PAGE in server/server.ts
 
 describe("the feed in pages", () => {
-  it("never sends more than a page, and nothing after the last deal", async () => {
+  it("never sends more than a page", async () => {
     const first = await call("/api/deals");
     expect(first.status).toBe(200);
     expect(first.data.length).toBeLessThanOrEqual(PAGE);
-    const all = await wholeFeed("/api/deals");
-    if (all.length) expect(await call(`/api/deals?after=${all.at(-1).id}`)).toEqual({ status: 200, data: [] });
+  });
+
+  // Read through a search only this test's posts match: across the whole
+  // feed, another spec file selling out an older post moves it past the end
+  // while this reads, which is right, but made this test fail now and then.
+  it.skipIf(!writes)("sends nothing after the last deal", async () => {
+    const poster = await person("spec last");
+    const tag = `ls${crypto.randomUUID().replace(/[^a-f]/g, "").slice(0, 8)}x`;
+    for (let i = 0; i < 3; i++) await call("/api/deals", special(poster, { item: `Last test ${i} ${tag}` }));
+    const all = await wholeFeed(`/api/deals?q=${tag}`);
+    expect(all).toHaveLength(3);
+    expect(await call(`/api/deals?q=${tag}&after=${all.at(-1).id}`)).toEqual({ status: 200, data: [] });
   });
 
   it("refuses an after that isn't a deal's id", async () => {
