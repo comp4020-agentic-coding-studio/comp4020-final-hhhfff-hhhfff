@@ -165,6 +165,14 @@ function rankedList(store: string | null, terms: string[] | null): Ranked[] {
   return found;
 }
 
+// Each store with how many of its specials are live and not sold out, for
+// the page's map. Worked out from the same cached keys as the feed.
+function storesWithCounts(): (Store & { live: number })[] {
+  const live = new Map<string, number>();
+  for (const k of activeDealKeys(null, todayInCanberra())) if (!k.gone) live.set(k.storeId, (live.get(k.storeId) ?? 0) + 1);
+  return STORES.map((st) => ({ ...st, live: live.get(st.id) ?? 0 }));
+}
+
 function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {
   const terms = query === null ? null : searchTerms(query);
   if (terms && !terms.length) return { deals: [], total: 0 };
@@ -360,7 +368,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const method = req.method ?? "GET";
   let m: RegExpMatchArray | null;
 
-  if (method === "GET" && path === "/api/stores") return send(res, 200, STORES);
+  if (method === "GET" && path === "/api/stores") return send(res, 200, storesWithCounts());
 
   // live updates: who is listening only decides who also gets their own notices
   if (method === "GET" && path === "/api/events") {

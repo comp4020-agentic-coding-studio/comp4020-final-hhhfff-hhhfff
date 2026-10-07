@@ -58,7 +58,19 @@
         <label for="store-filter">Showing</label>
         <select id="store-filter"><option value="">Loading stores…</option></select>
         <button type="button" id="locate" class="quiet" title="Sort stores by distance from where you are">Near me</button>
+        <button type="button" id="map-toggle" class="quiet" aria-expanded="false" aria-controls="store-map">Map</button>
         <p class="hint" id="locate-status" aria-live="polite"></p>
+      </section>
+
+      <!-- folded until asked for: the stores drawn where they are, sized by live specials;
+           drawn from the store list alone, no map tiles or map service -->
+      <section id="store-map" class="card store-map" aria-labelledby="store-map-heading" hidden>
+        <div class="store-map-head">
+          <h2 id="store-map-heading">Where the specials are</h2>
+          <button type="button" id="map-close" class="quiet small">Close</button>
+        </div>
+        <svg id="map-svg" role="group" aria-label="Stores near ANU; pick one to show its specials"></svg>
+        <p class="hint">Bigger dot, more live specials. Pick a store to show only its specials; pick it again for all stores.</p>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->

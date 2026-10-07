@@ -1177,6 +1177,96 @@ button.danger {
   }
 }
 
+/* The store map: an SVG drawn from the stores' coordinates, nothing more */
+.store-map {
+  margin: 0.5rem 0 0.75rem;
+  animation: drop-in 0.2s ease-out;
+}
+
+.store-map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.store-map h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+#map-svg {
+  display: block;
+  width: 100%;
+  max-width: 30rem;
+  height: auto;
+  margin: 0.5rem auto 0.25rem;
+  background:
+    radial-gradient(circle, var(--line) 1px, transparent 1.5px) 0 0 / 22px 22px,
+    var(--soft);
+  border-radius: 10px;
+}
+
+.map-area {
+  fill: var(--muted);
+  opacity: 0.55;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.map-anu rect {
+  fill: var(--ink);
+}
+
+.map-anu text {
+  fill: var(--ink);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.map-store {
+  cursor: pointer;
+  outline: none;
+}
+
+.map-store circle {
+  fill: var(--card);
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  transition: scale 0.15s;
+}
+
+.map-store[data-live="yes"] circle {
+  fill: var(--ticket);
+  stroke: var(--ticket-price);
+  stroke-width: 2;
+}
+
+.map-store text {
+  fill: var(--ticket-ink);
+  font-size: 10px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.map-store:hover circle,
+.map-store:focus-visible circle {
+  scale: 1.2;
+}
+
+.map-store:focus-visible circle {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+.map-store[aria-pressed="true"] circle {
+  stroke: var(--accent-text);
+  stroke-width: 4;
+}
+
 /* "+1" floats up from the confirmations after confirming */
 .trust {
   position: relative;

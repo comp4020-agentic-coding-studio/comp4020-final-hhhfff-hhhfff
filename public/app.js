@@ -1158,7 +1158,159 @@ function connectLive() {
   });
 }
 
+// --- the store map: each store where it is, its dot sized by live specials
+
+const SVG = "http://www.w3.org/2000/svg";
+const AREAS = [
+  { name: "Civic", lat: -35.2822, lon: 149.1305 },
+  { name: "Braddon", lat: -35.2685, lon: 149.1352 },
+  { name: "Acton", lat: -35.2745, lon: 149.1222 },
+  { name: "O'Connor", lat: -35.2615, lon: 149.1195 },
+  { name: "Ainslie", lat: -35.2645, lon: 149.1478 },
+  { name: "Dickson", lat: -35.2512, lon: 149.1452 },
+  { name: "Lyneham", lat: -35.2495, lon: 149.1235 },
+];
+// drawn at about a phone's width, so a dot is a finger's size there
+const mapWidth = 360;
+const mapPad = 30;
+
+function svgEl(name, attrs = {}) {
+  const el = document.createElementNS(SVG, name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  return el;
+}
+
+function drawMap() {
+  const svg = $("#map-svg");
+  const all = [...stores, ANU];
+  const lonScale = Math.cos((ANU.lat * Math.PI) / 180);
+  const [minX, maxX] = [Math.min(...all.map((p) => p.lon)), Math.max(...all.map((p) => p.lon))];
+  const [minY, maxY] = [Math.min(...all.map((p) => -p.lat)), Math.max(...all.map((p) => -p.lat))];
+  const scale = (mapWidth - 2 * mapPad) / ((maxX - minX) * lonScale);
+  const height = Math.round((maxY - minY) * scale + 2 * mapPad);
+  const at = (p) => ({ x: mapPad + (p.lon - minX) * lonScale * scale, y: mapPad + (-p.lat - minY) * scale });
+  svg.setAttribute("viewBox", `0 0 ${mapWidth} ${height}`);
+
+  const areas = AREAS.map((a) => {
+    const { x, y } = at(a);
+    const half = a.name.length * 4.5;
+    const t = svgEl("text", { x: Math.min(Math.max(x, half + 4), mapWidth - half - 4), y: Math.max(y, 14), class: "map-area", "text-anchor": "middle" });
+    t.textContent = a.name;
+    return t;
+  });
+
+  const anu = at(ANU);
+  const home = svgEl("g", { class: "map-anu", transform: `translate(${anu.x} ${anu.y})` });
+  const anuLabel = svgEl("text", { y: -10, "text-anchor": "middle" });
+  anuLabel.textContent = "ANU";
+  home.append(svgEl("rect", { x: -5, y: -5, width: 10, height: 10, rx: 2, transform: "rotate(45)" }), anuLabel);
+
+  // stores a few doors apart would sit on top of each other: nudge them
+  // apart, and off the ANU marker, which stays put
+  const dots = stores.map((s) => ({ s, ...at(s), r: s.live ? 9 + 3 * Math.sqrt(s.live) : 5.5 }));
+  const fixed = { ...anu, r: 8, fixed: true };
+  for (let round = 0; round < 40; round++) {
+    for (const a of [fixed, ...dots])
+      for (const b of dots) {
+        if (a === b) continue;
+        const [dx, dy] = [b.x - a.x || 0.01, b.y - a.y];
+        const gap = Math.hypot(dx, dy);
+        const need = a.r + b.r + 1.5;
+        if (gap >= need) continue;
+        const push = (need - gap) / (a.fixed ? 1 : 2) / gap;
+        if (!a.fixed) {
+          a.x -= dx * push;
+          a.y -= dy * push;
+        }
+        b.x += dx * push;
+        b.y += dy * push;
+      }
+    for (const d of dots) {
+      d.x = Math.min(Math.max(d.x, d.r + 2), mapWidth - d.r - 2);
+      d.y = Math.min(Math.max(d.y, d.r + 2), height - d.r - 2);
+    }
+  }
+
+  const chosen = $("#store-filter").value;
+  // fullest drawn last, so it stays on top
+  const marks = dots
+    .sort((a, b) => a.s.live - b.s.live)
+    .map(({ s, x, y, r }) => {
+      const g = svgEl("g", {
+        class: "map-store",
+        transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`,
+        tabindex: 0,
+        role: "button",
+        "data-live": s.live ? "yes" : "no",
+        "aria-pressed": String(s.id === chosen),
+        "data-store": s.id,
+      });
+      const what = `${s.name}, ${s.where}: ${s.live ? `${s.live} live special${s.live === 1 ? "" : "s"}` : "nothing live"}`;
+      g.setAttribute("aria-label", what);
+      const tip = svgEl("title");
+      tip.textContent = what;
+      g.append(tip, svgEl("circle", { r }));
+      if (s.live) {
+        const n = svgEl("text", { "text-anchor": "middle", dy: "0.35em" });
+        n.textContent = String(s.live);
+        g.append(n);
+      }
+      return g;
+    });
+  // redrawing mustn't lose the keyboard's place
+  const focused = svg.contains(document.activeElement) && document.activeElement.dataset.store;
+  svg.replaceChildren(...areas, home, ...marks);
+  if (focused) svg.querySelector(`[data-store="${focused}"]`)?.focus();
+}
+
+function pickFromMap(id) {
+  const filter = $("#store-filter");
+  filter.value = filter.value === id ? "" : id;
+  filter.dispatchEvent(new Event("change"));
+}
+
+$("#map-svg").addEventListener("click", (e) => {
+  const g = e.target.closest(".map-store");
+  if (g) pickFromMap(g.dataset.store);
+});
+$("#map-svg").addEventListener("keydown", (e) => {
+  const g = e.target.closest(".map-store");
+  if (!g || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault();
+  pickFromMap(g.dataset.store);
+});
+
+// counts come with the store list; it's fetched again only while the map is open
+let mapRefresh = 0;
+async function refreshMap() {
+  if ($("#store-map").hidden) return;
+  const fresh = await api("/api/stores").catch(() => null);
+  if (!fresh) return;
+  const live = new Map(fresh.map((s) => [s.id, s.live]));
+  for (const s of stores) s.live = live.get(s.id) ?? 0;
+  drawMap();
+}
+const refreshMapSoon = () => {
+  clearTimeout(mapRefresh);
+  mapRefresh = setTimeout(refreshMap, 1000);
+};
+
+function showMap(open) {
+  $("#store-map").hidden = !open;
+  $("#map-toggle").setAttribute("aria-expanded", String(open));
+  if (open) {
+    drawMap();
+    refreshMap();
+  }
+}
+$("#map-toggle").addEventListener("click", () => showMap($("#store-map").hidden));
+$("#map-close").addEventListener("click", () => {
+  showMap(false);
+  $("#map-toggle").focus();
+});
+
 function onLive(ev) {
+  if (ev.type !== "notice") refreshMapSoon();
   if (ev.type === "notice") loadNotices();
   else if (ev.type === "deleted") removeCard(ev.id);
   else if (ev.type === "new") newPostWaiting(ev.id);
@@ -1267,6 +1419,7 @@ new IntersectionObserver(([e]) => filters.classList.toggle("stuck", !e.isInterse
 new ResizeObserver(() => document.documentElement.style.setProperty("--filters-h", `${filters.offsetHeight}px`)).observe(filters);
 
 $("#store-filter").addEventListener("change", () => {
+  if (!$("#store-map").hidden) drawMap();
   page = 1;
   syncAddress(false);
   loadFeed("swap");
