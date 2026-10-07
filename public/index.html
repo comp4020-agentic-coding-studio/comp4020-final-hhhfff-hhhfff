@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>discountShow</title>
     <meta name="description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <!-- before the styles, so a chosen theme is in place before anything paints -->
+    <script src="/theme.js"></script>
     <link rel="stylesheet" href="/styles.css" />
     <script type="module" src="/app.js"></script>
   </head>
@@ -17,6 +19,7 @@
         </div>
         <nav class="top-links" aria-label="Site and account">
           <a href="/readme/">About</a>
+          <button type="button" id="theme-toggle" class="on-accent quiet theme-toggle" aria-label="Colours: follow the system. Switch to light">◐</button>
           <span id="who" class="who"></span>
           <button type="button" id="show-login" class="on-accent" aria-controls="account" aria-expanded="false">Log in</button>
           <button type="button" id="logout" class="on-accent quiet" hidden>Log out</button>

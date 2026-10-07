@@ -136,6 +136,41 @@ $("#locate").addEventListener("click", () => {
   );
 });
 
+// --- colours: follow the system, or light, or dark, chosen with the header's
+// button and kept on this device (theme.js applies it before the page paints)
+
+const THEMES = ["system", "light", "dark"];
+const THEME_TEXT = {
+  system: { icon: "◐", name: "follow the system" },
+  light: { icon: "☀", name: "light" },
+  dark: { icon: "☾", name: "dark" },
+};
+
+function showTheme() {
+  const now = document.documentElement.dataset.theme ?? "system";
+  const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
+  const button = $("#theme-toggle");
+  button.textContent = THEME_TEXT[now].icon;
+  const label = `Colours: ${THEME_TEXT[now].name}. Switch to ${THEME_TEXT[next].name}`;
+  button.setAttribute("aria-label", label);
+  button.title = label;
+}
+
+$("#theme-toggle").addEventListener("click", () => {
+  const now = document.documentElement.dataset.theme ?? "system";
+  const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
+  if (next === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = next;
+  try {
+    if (next === "system") localStorage.removeItem("discountShow.theme");
+    else localStorage.setItem("discountShow.theme", next);
+  } catch {
+    // private browsing: the choice lasts until the page closes
+  }
+  showTheme();
+});
+showTheme();
+
 // --- notifications: what happened to my posts while I was away
 
 async function loadNotices() {

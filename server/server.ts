@@ -368,6 +368,7 @@ async function sendReadme(res: ServerResponse): Promise<void> {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>About · discountShow</title>
+<script src="/theme.js"></script>
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body class="readme">

@@ -1,23 +1,25 @@
-/* Colours are named for their job. Dark mode (below) only swaps the values. */
+/* Colours are named for their job; light-dark() gives each its light and dark
+   value. Which one shows follows the system, unless the visitor picked a theme
+   with the header's button (theme.js puts it on <html> before anything paints). */
 :root {
   color-scheme: light dark;
-  --ink: #1d1b16;
-  --muted: #615c50;
-  --paper: #faf7f0;
-  --card: #fff;
-  --field: #fff;
-  --line: #e2dccd;
-  --soft: #f3efe4; /* a quiet panel inside a card */
-  --tint: #fff2c2; /* the yellow of a markdown sticker, and of search marks */
-  --tint-line: #e6cf7a;
-  --accent: #c8102e; /* the red behind white text: header, main buttons */
+  --ink: light-dark(#1d1b16, #ece7dc);
+  --muted: light-dark(#615c50, #a8a194);
+  --paper: light-dark(#faf7f0, #15130f);
+  --card: light-dark(#fff, #1f1c17);
+  --field: light-dark(#fff, #27231d);
+  --line: light-dark(#e2dccd, #3b362d);
+  --soft: light-dark(#f3efe4, #2b2720); /* a quiet panel inside a card */
+  --tint: light-dark(#fff2c2, #4a3f12); /* the yellow of a markdown sticker, and of search marks */
+  --tint-line: light-dark(#e6cf7a, #7a6a24);
+  --accent: light-dark(#c8102e, #b5102a); /* the red behind white text: header, main buttons */
   --accent-ink: #fff;
-  --accent-text: #c8102e; /* the red as text on the page: prices, errors */
-  --button-bg: #1d1b16;
-  --button-ink: #fff;
-  --good: #1f7a3d;
-  --focus: #1a5fd0;
-  --ticket: #ffd84d; /* the shelf ticket stays yellow in dark mode too */
+  --accent-text: light-dark(#c8102e, #ff7a8a); /* the red as text on the page: prices, errors */
+  --button-bg: light-dark(#1d1b16, #ece7dc);
+  --button-ink: light-dark(#fff, #15130f);
+  --good: light-dark(#1f7a3d, #2f9b55);
+  --focus: light-dark(#1a5fd0, #7aa7ff);
+  --ticket: light-dark(#ffd84d, #f0c843); /* the shelf ticket stays yellow in dark mode too */
   --ticket-ink: #3b3000;
   --ticket-price: #b00d29;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -26,25 +28,12 @@
   line-height: 1.45;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #ece7dc;
-    --muted: #a8a194;
-    --paper: #15130f;
-    --card: #1f1c17;
-    --field: #27231d;
-    --line: #3b362d;
-    --soft: #2b2720;
-    --tint: #4a3f12;
-    --tint-line: #7a6a24;
-    --accent: #b5102a;
-    --accent-text: #ff7a8a;
-    --button-bg: #ece7dc;
-    --button-ink: #15130f;
-    --good: #2f9b55;
-    --focus: #7aa7ff;
-    --ticket: #f0c843;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 * {
@@ -107,6 +96,17 @@ button.on-accent.quiet {
   background: transparent;
   color: var(--accent-ink);
   border: 1px solid rgb(255 255 255 / 0.6);
+}
+
+/* the theme button: an icon on the red header */
+button.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  font-size: 1.05rem;
+  line-height: 1;
 }
 
 .masthead .top-links :focus-visible {
@@ -1175,37 +1175,20 @@ button.danger {
    units; --u (map units per screen pixel, set as the view changes) keeps text
    and lines their size on screen, and roads widen to their real width close up. */
 .store-map {
-  --map-ground: #f2efe9;
-  --map-building: #e1dbd0;
-  --map-building-line: #d3ccbf;
-  --map-green: #cfe8c0;
-  --map-water: #a9d3f2;
-  --map-road: #fff;
-  --map-casing: #d6d0c4;
-  --map-major: #fbd97a;
-  --map-major-casing: #e2ad3c;
-  --map-path: #a59e90;
-  --map-label: #4d483f;
-  --map-halo: rgb(255 255 255 / 0.85);
+  --map-ground: light-dark(#f2efe9, #1b1914);
+  --map-building: light-dark(#e1dbd0, #2c2821);
+  --map-building-line: light-dark(#d3ccbf, #353027);
+  --map-green: light-dark(#cfe8c0, #1f2d1b);
+  --map-water: light-dark(#a9d3f2, #173246);
+  --map-road: light-dark(#fff, #3a352c);
+  --map-casing: light-dark(#d6d0c4, #121009);
+  --map-major: light-dark(#fbd97a, #6a5626);
+  --map-major-casing: light-dark(#e2ad3c, #2a2210);
+  --map-path: light-dark(#a59e90, #6c6557);
+  --map-label: light-dark(#4d483f, #cfc8ba);
+  --map-halo: light-dark(rgb(255 255 255 / 0.85), rgb(20 18 14 / 0.85));
   margin: 0.5rem 0 0.75rem;
   animation: drop-in 0.2s ease-out;
-}
-
-@media (prefers-color-scheme: dark) {
-  .store-map {
-    --map-ground: #1b1914;
-    --map-building: #2c2821;
-    --map-building-line: #353027;
-    --map-green: #1f2d1b;
-    --map-water: #173246;
-    --map-road: #3a352c;
-    --map-casing: #121009;
-    --map-major: #6a5626;
-    --map-major-casing: #2a2210;
-    --map-path: #6c6557;
-    --map-label: #cfc8ba;
-    --map-halo: rgb(20 18 14 / 0.85);
-  }
 }
 
 .store-map-head {
