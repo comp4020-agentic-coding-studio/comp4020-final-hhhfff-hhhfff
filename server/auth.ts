@@ -19,17 +19,22 @@ export const ACTIONS = [
   "correct",
   "stock",
   "comment",
+  "like",
+  "report",
   "notifications",
-  "delete-own",
+  "delete-own", // a post or comment of your own
   "delete-any",
+  "moderate", // restore a reported comment, or keep it hidden
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-const MEMBER: readonly Action[] = ["post", "confirm", "correct", "stock", "comment", "notifications", "delete-own"];
+const MEMBER: readonly Action[] = [
+  "post", "confirm", "correct", "stock", "comment", "like", "report", "notifications", "delete-own",
+];
 const PERMISSIONS: Record<Role, readonly Action[]> = {
   guest: [],
   user: MEMBER,
-  admin: [...MEMBER, "delete-any"],
+  admin: [...MEMBER, "delete-any", "moderate"],
 };
 
 export const can = (role: Role, action: Action): boolean => PERMISSIONS[role].includes(action);

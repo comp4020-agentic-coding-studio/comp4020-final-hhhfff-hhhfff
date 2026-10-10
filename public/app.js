@@ -191,6 +191,25 @@ async function loadNotices() {
         p.remove();
         box.hidden = !box.children.length;
       });
+      // a reported comment: an admin decides here, or on the card
+      if (n.commentId && isAdmin()) {
+        for (const [text, decision] of [["Restore it", "restore"], ["Keep it hidden", "keep"]]) {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.className = "small";
+          b.textContent = text;
+          b.addEventListener("click", async () => {
+            try {
+              await api(`/api/comments/${n.commentId}/review`, { decision });
+              p.textContent = decision === "restore" ? "Restored: everyone can see it again." : "Kept hidden.";
+            } catch (err) {
+              p.textContent = `Couldn't do that: ${err.message}`;
+            }
+            p.append(" ", ok);
+          });
+          p.append(" ", b);
+        }
+      }
       p.append(" ", ok);
       box.append(p);
     }
@@ -621,6 +640,7 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $("summary", details).textContent = d.comments === 1 ? "1 comment" : `${d.comments} comments`;
   details.addEventListener("toggle", () => details.open && loadComments(d.id, li));
   $(".comment-form", li).addEventListener("submit", (e) => postComment(e, d.id, li));
+  $(".reply-cancel", li).addEventListener("click", () => stopReply(li));
   $(".comment-form", li).hidden = !me;
   const loginToComment = $(".login-to-comment", li);
   loginToComment.hidden = !!me;
@@ -778,38 +798,161 @@ function plusOne(id) {
   setTimeout(() => plus.remove(), 1200); // not on animationend, which reduced motion never fires
 }
 
+// --- comments: one level of replies (a reply to a reply sits under the same
+// comment, "@" whom it answers), likes, reports, and deleting your own along
+// with everything that answers it. A comment ten people reported is hidden
+// until an admin restores it or keeps it hidden; only an admin sees its text.
+
+const countText = (n) => (n === 1 ? "1 comment" : `${n} comments`);
+
 async function loadComments(id, li) {
   const list = $(".comment-list", li);
   try {
     const comments = await api(`/api/deals/${id}/comments`);
-    list.replaceChildren(
-      ...comments.map((c) => {
-        const item = document.createElement("li");
-        const who = document.createElement("span");
-        who.className = "who";
-        who.textContent = `${nameOf(c.author)} · ${ago(c.createdAt)}`;
-        const body = document.createElement("p");
-        body.textContent = c.body;
-        item.append(who, body);
-        return item;
-      }),
-    );
+    list.replaceChildren(...comments.map((c) => commentItem(c, comments, id, li)));
+    $("details.comments summary", li).textContent = countText(comments.length);
+    const d = deals.find((x) => x.id === id);
+    if (d) d.comments = comments.length;
   } catch (err) {
     list.textContent = `Couldn't load comments: ${err.message}`;
   }
 }
 
+function commentItem(c, all, dealId, li) {
+  const item = document.createElement("li");
+  item.className = "comment";
+  item.classList.toggle("reply", c.parentId !== null);
+  item.classList.toggle("is-hidden", !!c.hidden);
+  const who = document.createElement("span");
+  who.className = "who";
+  who.textContent = `${nameOf(c.author)} · ${ago(c.createdAt)}`;
+  const body = document.createElement("p");
+  if (c.replyTo) {
+    const at = document.createElement("span");
+    at.className = "at";
+    at.textContent = `@${nameOf(c.replyTo)} `;
+    body.append(at);
+  }
+  const hiddenNote = c.hidden === "kept" ? "Hidden by an admin." : "Hidden after reports, waiting for an admin.";
+  if (c.body === null) body.append(hiddenNote);
+  else body.append(c.body);
+  item.append(who, body);
+  if (c.body !== null && c.hidden) {
+    // what an admin sees: the text, and why it's hidden
+    const why = document.createElement("p");
+    why.className = "hint";
+    why.textContent = `${hiddenNote} ${c.reports ?? 0} reports since it was last reviewed.`;
+    item.append(why);
+  }
+
+  const bar = document.createElement("div");
+  bar.className = "comment-actions";
+  const button = (text, cls, onClick) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `quiet small ${cls}`;
+    b.textContent = text;
+    b.addEventListener("click", onClick);
+    bar.append(b);
+    return b;
+  };
+  const done = () => loadComments(dealId, li);
+  const send = (path, body) => api(path, body).then(done, (err) => alertIn(item, err.message));
+  const mine = isMe(c.author);
+
+  // likes: a button for someone who may like it, otherwise just the count
+  if (me && !mine && !c.hidden) {
+    const like = button(`♥ ${c.likes}`, "like", () => send(`/api/comments/${c.id}/like`, { liked: !c.liked }));
+    like.setAttribute("aria-pressed", String(c.liked));
+    like.setAttribute("aria-label", `${c.liked ? "Unlike" : "Like"}, ${c.likes} ${c.likes === 1 ? "like" : "likes"}`);
+  } else if (c.likes) {
+    const count = document.createElement("span");
+    count.className = "likes";
+    count.textContent = `♥ ${c.likes}`;
+    count.setAttribute("aria-label", `${c.likes} ${c.likes === 1 ? "like" : "likes"}`);
+    bar.append(count);
+  }
+  if (me && !c.hidden) button("Reply", "reply-start", () => startReply(li, c));
+  if (me && !mine && !c.hidden) {
+    if (c.reported) {
+      const note = document.createElement("span");
+      note.className = "hint";
+      note.textContent = "You reported this";
+      bar.append(note);
+    } else {
+      button("Report", "report", () =>
+        ask(item, "Report this comment as rude, spam or off-topic? Ten reports hide it until an admin looks.",
+          "Report it", () => send(`/api/comments/${c.id}/report`, {})));
+    }
+  }
+  if (me && (mine || isAdmin())) {
+    const replies = all.filter((x) => x.parentId === c.id).length;
+    const warning = c.parentId === null
+      ? replies ? `Delete this comment and its ${replies === 1 ? "reply" : `${replies} replies`}?` : "Delete this comment?"
+      : "Delete this reply, and any replies answering it?";
+    button(mine ? "Delete" : "Delete (admin)", "delete-comment", () =>
+      ask(item, warning, "Yes, delete", () => send(`/api/comments/${c.id}/delete`, {})));
+  }
+  if (c.hidden && isAdmin()) {
+    button("Restore", "restore", () => send(`/api/comments/${c.id}/review`, { decision: "restore" }));
+    if (c.hidden === "reported") button("Keep hidden", "keep", () => send(`/api/comments/${c.id}/review`, { decision: "keep" }));
+  }
+  if (bar.children.length) item.append(bar);
+  return item;
+}
+
+// asks on the comment itself before something that can't be undone
+function ask(item, question, yes, onYes) {
+  $(":scope > .comment-confirm", item)?.remove();
+  const box = document.createElement("div");
+  box.className = "comment-confirm";
+  box.setAttribute("role", "group");
+  const p = document.createElement("p");
+  p.textContent = question;
+  const ok = document.createElement("button");
+  ok.type = "button";
+  ok.className = "small danger";
+  ok.textContent = yes;
+  ok.addEventListener("click", () => {
+    box.remove();
+    onYes();
+  });
+  const no = document.createElement("button");
+  no.type = "button";
+  no.className = "quiet small";
+  no.textContent = "Cancel";
+  no.addEventListener("click", () => box.remove());
+  box.append(p, ok, " ", no);
+  item.append(box);
+  no.focus();
+}
+
+// Replying uses the card's one comment box, which says whom it answers.
+function startReply(li, c) {
+  const form = $(".comment-form", li);
+  form.dataset.replyTo = c.id;
+  const chip = $(".replying", li);
+  $(".replying-to", chip).textContent = `Replying to @${nameOf(c.author)}`;
+  chip.hidden = false;
+  form.elements.body.focus();
+}
+
+function stopReply(li) {
+  delete $(".comment-form", li).dataset.replyTo;
+  $(".replying", li).hidden = true;
+}
+
 async function postComment(e, id, li) {
   e.preventDefault();
   if (!requireLogin()) return;
-  const input = e.target.elements.body;
+  const form = e.target;
+  const input = form.elements.body;
   if (!input.value.trim()) return input.focus();
+  const replyTo = form.dataset.replyTo ? Number(form.dataset.replyTo) : undefined;
   try {
-    await api(`/api/deals/${id}/comments`, { body: input.value });
+    await api(`/api/deals/${id}/comments`, { body: input.value, replyTo });
     input.value = "";
-    const d = deals.find((x) => x.id === id);
-    if (d) d.comments += 1;
-    $("details.comments summary", li).textContent = d?.comments === 1 ? "1 comment" : `${d?.comments ?? ""} comments`;
+    stopReply(li);
     loadComments(id, li);
   } catch (err) {
     alertIn(li, err.message);
@@ -1731,12 +1874,12 @@ async function refreshDeal(id) {
     renderFeed(); // it moves
     return glow(id);
   }
-  card.replaceWith(cardFor(
-    d,
-    storeById().get(d.storeId),
-    !!card.querySelector("details.comments")?.open,
-    !!card.querySelector("details.correct")?.open,
-  ));
+  const commentsOpen = !!card.querySelector("details.comments")?.open;
+  const next = cardFor(d, storeById().get(d.storeId), commentsOpen, !!card.querySelector("details.correct")?.open);
+  card.replaceWith(next);
+  // a like or a review doesn't change the post itself, so the card may be the
+  // same one: open comments are read again either way
+  if (commentsOpen && next === card) loadComments(id, next);
   glow(id);
 }
 

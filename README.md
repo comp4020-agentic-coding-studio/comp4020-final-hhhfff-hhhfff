@@ -32,6 +32,13 @@ not the number of posts:
 5. **"Gone" arrives before the walk.** An open page shows changes to the
    posts on it, and new posts on page one, within moments.
 
+Comments are where readers ask "still there?" and answer each other: one
+level of replies, likes (not your own, one each), and deleting your own,
+which takes its replies with it. A comment ten different people report is
+hidden until an admin restores it or keeps it hidden, so a few people can't
+silence one they merely disagree with, and an admin decides rather than the
+crowd alone.
+
 Reading is free; writing needs an account. I first used a nickname and a
 browser-held key, since friction matters in an aisle. But the rules above
 count *people*, and a new browser was a new person, so three "different"
@@ -43,7 +50,9 @@ Only the poster, or an admin, can delete a post.
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 including simultaneous posts; the confirmation and three-person correction
 rules; poster-only delete; admins only from `ADMIN_USERS`; the price check;
-the stock-report limit; guests being read-only; logins across browsers; no
+the stock-report limit; comment replies, likes, deleting with replies, and
+the ten-report hide with an admin's review, including reports at once;
+guests being read-only; logins across browsers; no
 password or session token leaking; typo-tolerant search; every live post
 reachable across pages; and live updates reaching an open page.
 

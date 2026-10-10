@@ -69,17 +69,32 @@ export interface Deal {
   history: AppliedCorrection[];
 }
 
+// Comments are one level deep: a reply hangs under a top-level comment
+// (parentId), and replyTo names the comment it answers, which may itself be a
+// reply. Hidden comments keep their place but only an admin sees the body.
 export interface Comment {
   id: number;
   dealId: number;
-  body: string;
+  parentId: number | null;
+  replyTo: Author | null; // whose comment this answers
+  body: string | null; // null while hidden, unless an admin is looking
   author: Author;
   createdAt: string;
+  likes: number;
+  liked: boolean; // by whoever asked
+  reported: boolean; // by whoever asked
+  hidden: "reported" | "kept" | null; // awaiting an admin, or kept hidden by one
+  reports?: number; // this round's reports; admins only
 }
+
+// This many different people reporting a comment hides it until an admin
+// restores it (which starts the count again) or keeps it hidden.
+export const REPORT_THRESHOLD = 10;
 
 export interface Notification {
   id: number;
   dealId: number;
+  commentId: number | null; // set when an admin is asked to review a comment
   text: string;
   createdAt: string;
 }
@@ -200,6 +215,41 @@ if (!columns("deals").includes("item_key")) {
 db.exec(`DROP INDEX IF EXISTS deals_dupe`);
 db.exec(`CREATE INDEX IF NOT EXISTS deals_live ON deals(store_id, item_key)`);
 
+// Replies, deleting, likes and reports on comments.
+{
+  const have = columns("comments");
+  for (const [name, type] of [
+    ["parent_id", "INTEGER"],
+    ["reply_to_id", "INTEGER"],
+    ["reply_to_name", "TEXT"],
+    ["reply_to_author", "TEXT"],
+    ["deleted_at", "TEXT"],
+    ["hidden", "TEXT"],
+    ["report_round", "INTEGER NOT NULL DEFAULT 0"],
+  ]) {
+    if (!have.includes(name)) db.exec(`ALTER TABLE comments ADD COLUMN ${name} ${type}`);
+  }
+  if (!columns("notifications").includes("comment_id")) {
+    db.exec(`ALTER TABLE notifications ADD COLUMN comment_id INTEGER`);
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS comment_likes (
+      comment_id INTEGER NOT NULL REFERENCES comments(id),
+      author_id  TEXT NOT NULL,
+      PRIMARY KEY (comment_id, author_id)
+    );
+    -- one report per person per comment, ever: someone who reported it
+    -- before an admin restored it can't report it again
+    CREATE TABLE IF NOT EXISTS comment_reports (
+      comment_id INTEGER NOT NULL REFERENCES comments(id),
+      author_id  TEXT NOT NULL,
+      round      INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (comment_id, author_id)
+    );
+  `);
+}
+
 // A deleted deal is hidden, not removed: other people's comments,
 // confirmations and corrections on it stay in the database.
 if (!columns("deals").includes("deleted_at")) {
@@ -242,7 +292,7 @@ const selectDeals = `
   SELECT d.*,
          s.stock, s.author_id AS stock_author_id, s.author_name AS stock_author_name,
          s.created_at AS stock_at,
-         (SELECT count(*) FROM comments c WHERE c.deal_id = d.id) AS comments
+         (SELECT count(*) FROM comments c WHERE c.deal_id = d.id AND c.deleted_at IS NULL) AS comments
   FROM deals d
   JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
 `;
@@ -637,32 +687,144 @@ export function takeNotifications(authorId: string): Notification[] {
     return rows.map((r) => ({
       id: r.id as number,
       dealId: r.deal_id as number,
+      commentId: (r.comment_id as number | null) ?? null,
       text: r.text as string,
       createdAt: r.created_at as string,
     }));
   });
 }
 
-export function listComments(dealId: number): Comment[] {
-  return db
-    .prepare(`SELECT * FROM comments WHERE deal_id = ? ORDER BY id`)
-    .all(dealId)
-    .map((r) => {
-      const row = r as Row;
-      return {
-        id: row.id as number,
-        dealId: row.deal_id as number,
-        body: row.body as string,
-        author: { id: row.author_id as string, name: row.author_name as string },
-        createdAt: row.created_at as string,
-      };
-    });
+// --- comments
+
+// who is reading, for "liked by me", "reported by me" and what an admin sees
+export type Viewer = { id: string; admin: boolean } | null;
+
+// A deal's live comments, each top-level one followed by its replies, oldest first.
+export function listComments(dealId: number, viewer: Viewer): Comment[] {
+  const me = viewer?.id ?? "";
+  return (db
+    .prepare(
+      `SELECT c.*,
+         (SELECT count(*) FROM comment_likes l WHERE l.comment_id = c.id) AS likes,
+         EXISTS (SELECT 1 FROM comment_likes l WHERE l.comment_id = c.id AND l.author_id = ?) AS liked,
+         EXISTS (SELECT 1 FROM comment_reports r WHERE r.comment_id = c.id AND r.author_id = ?) AS reported,
+         (SELECT count(*) FROM comment_reports r WHERE r.comment_id = c.id AND r.round = c.report_round) AS reports
+       FROM comments c
+       WHERE c.deal_id = ? AND c.deleted_at IS NULL
+       ORDER BY coalesce(c.parent_id, c.id), c.id`,
+    )
+    .all(me, me, dealId) as Row[]).map((row) => {
+    const hidden = (row.hidden as Comment["hidden"]) ?? null;
+    const c: Comment = {
+      id: row.id as number,
+      dealId: row.deal_id as number,
+      parentId: (row.parent_id as number | null) ?? null,
+      replyTo: row.reply_to_author
+        ? { id: row.reply_to_author as string, name: row.reply_to_name as string }
+        : null,
+      body: hidden && !viewer?.admin ? null : (row.body as string),
+      author: { id: row.author_id as string, name: row.author_name as string },
+      createdAt: row.created_at as string,
+      likes: Number(row.likes),
+      liked: !!row.liked,
+      reported: !!row.reported,
+      hidden,
+    };
+    if (viewer?.admin) c.reports = Number(row.reports);
+    return c;
+  });
 }
 
-export function addComment(dealId: number, body: string, author: Author): Comment {
-  const at = now();
+export interface CommentRef {
+  id: number;
+  dealId: number;
+  parentId: number | null;
+  author: Author;
+  hidden: Comment["hidden"];
+}
+
+// a live (not deleted) comment, or null
+export function getComment(id: number): CommentRef | null {
+  const row = db.prepare(`SELECT * FROM comments WHERE id = ? AND deleted_at IS NULL`).get(id) as Row | undefined;
+  if (!row) return null;
+  return {
+    id,
+    dealId: row.deal_id as number,
+    parentId: (row.parent_id as number | null) ?? null,
+    author: { id: row.author_id as string, name: row.author_name as string },
+    hidden: (row.hidden as Comment["hidden"]) ?? null,
+  };
+}
+
+// `to` is the comment being answered, already checked to be live and on this deal
+export function addComment(dealId: number, body: string, author: Author, to: CommentRef | null = null): number {
   const { lastInsertRowid } = db
-    .prepare(`INSERT INTO comments (deal_id, body, author_id, author_name, created_at) VALUES (?, ?, ?, ?, ?)`)
-    .run(dealId, body, author.id, author.name, at);
-  return { id: Number(lastInsertRowid), dealId, body, author, createdAt: at };
+    .prepare(
+      `INSERT INTO comments (deal_id, body, author_id, author_name, created_at, parent_id, reply_to_id, reply_to_author, reply_to_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(dealId, body, author.id, author.name, now(), to ? (to.parentId ?? to.id) : null, to?.id ?? null,
+      to?.author.id ?? null, to?.author.name ?? null);
+  return Number(lastInsertRowid);
+}
+
+// Deletes a comment and every reply under it or answering it, all the way down.
+export function deleteComment(id: number): number {
+  return Number(
+    db
+      .prepare(
+        `WITH RECURSIVE gone(id) AS (
+           SELECT ?
+           UNION SELECT c.id FROM comments c JOIN gone g ON c.parent_id = g.id OR c.reply_to_id = g.id
+         )
+         UPDATE comments SET deleted_at = ? WHERE id IN (SELECT id FROM gone) AND deleted_at IS NULL`,
+      )
+      .run(id, now()).changes,
+  );
+}
+
+// Sets whether this person likes the comment; true if that changed anything.
+export function likeComment(id: number, who: Author, like: boolean): boolean {
+  const sql = like
+    ? `INSERT OR IGNORE INTO comment_likes (comment_id, author_id) VALUES (?, ?)`
+    : `DELETE FROM comment_likes WHERE comment_id = ? AND author_id = ?`;
+  return db.prepare(sql).run(id, who.id).changes > 0;
+}
+
+// One report per person per comment. The report that brings this round to
+// REPORT_THRESHOLD hides the comment and tells every admin, in the same
+// transaction as the count, so two reports at once can't both do it or miss it.
+export function reportComment(id: number, who: Author): { added: boolean; admins: string[] } {
+  return tx(() => {
+    const c = db.prepare(`SELECT * FROM comments WHERE id = ?`).get(id) as Row;
+    const added = db
+      .prepare(`INSERT OR IGNORE INTO comment_reports (comment_id, author_id, round, created_at) VALUES (?, ?, ?, ?)`)
+      .run(id, who.id, c.report_round as number, now()).changes > 0;
+    if (!added || c.hidden) return { added, admins: [] };
+    const { n } = db
+      .prepare(`SELECT count(*) AS n FROM comment_reports WHERE comment_id = ? AND round = ?`)
+      .get(id, c.report_round as number) as { n: number };
+    if (n < REPORT_THRESHOLD) return { added, admins: [] };
+    db.prepare(`UPDATE comments SET hidden = 'reported' WHERE id = ?`).run(id);
+    const deal = db.prepare(`SELECT item FROM deals WHERE id = ?`).get(c.deal_id as number) as { item: string };
+    const admins = (db.prepare(`SELECT id FROM users WHERE role = 'admin'`).all() as { id: string }[]).map((a) => a.id);
+    const tell = db.prepare(
+      `INSERT INTO notifications (author_id, deal_id, comment_id, text, created_at) VALUES (?, ?, ?, ?, ?)`,
+    );
+    for (const admin of admins) {
+      tell.run(admin, c.deal_id as number, id,
+        `${n} people reported ${c.author_name}'s comment on "${deal.item}": "${c.body}". ` +
+          `It's hidden until you restore it or keep it hidden.`, now());
+    }
+    return { added, admins };
+  });
+}
+
+// An admin's call on a hidden comment: restore it (the count starts again)
+// or keep it hidden. False if it isn't hidden.
+export function reviewComment(id: number, decision: "restore" | "keep"): boolean {
+  const sql = decision === "restore"
+    ? `UPDATE comments SET hidden = NULL, report_round = report_round + 1 WHERE id = ? AND hidden IS NOT NULL`
+    : `UPDATE comments SET hidden = 'kept' WHERE id = ? AND hidden IS NOT NULL`;
+  return db.prepare(sql).run(id).changes > 0;
 }

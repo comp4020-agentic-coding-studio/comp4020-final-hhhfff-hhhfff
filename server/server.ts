@@ -14,15 +14,20 @@ import {
   createDeal,
   createUser,
   dealKey,
+  deleteComment,
   deleteDeal,
   endSession,
   feedVersion,
   fieldValue,
+  getComment,
   getDeal,
   listComments,
+  likeComment,
   liveDuplicate,
   proposeCorrection,
+  reportComment,
   reportStock,
+  reviewComment,
   setAdmins,
   similarDeals,
   SOURCES,
@@ -38,6 +43,7 @@ import {
   type Source,
   type Stock,
   type Value,
+  type Viewer,
 } from "./db.ts";
 import { itemKey, searchScore, searchTerms } from "./match.ts";
 import { type Store, STORES, storeById } from "./stores.ts";
@@ -223,6 +229,12 @@ function need(req: IncomingMessage, action: Action, what: string): User {
 }
 
 const asAuthor = (u: User): Author => ({ id: u.id, name: u.name });
+
+// who is reading comments: decides "liked/reported by me" and whether hidden text shows
+const viewer = (req: IncomingMessage): Viewer => {
+  const u = whoIs(req);
+  return u ? { id: u.id, admin: can(u.role, "moderate") } : null;
+};
 
 function password(v: unknown): string {
   if (typeof v !== "string" || v.length < 8 || v.length > 128) {
@@ -570,14 +582,67 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/comments$/))) {
     const id = dealId(m[1]);
-    if (method === "GET") return send(res, 200, listComments(id));
+    if (method === "GET") return send(res, 200, listComments(id, viewer(req)));
     if (method === "POST") {
-      const by = asAuthor(need(req, "comment", "comment"));
+      const user = need(req, "comment", "comment");
       const b = await readJson(req);
-      const comment = addComment(id, str(b.body, "comment", 1, 500), by);
+      const body = str(b.body, "comment", 1, 500);
+      // a reply answers a live comment on this same deal
+      let to = null;
+      if (b.replyTo !== undefined && b.replyTo !== null) {
+        to = Number.isInteger(b.replyTo) ? getComment(b.replyTo as number) : null;
+        if (!to || to.dealId !== id) throw new HttpError(404, "that comment isn't here any more");
+      }
+      const newId = addComment(id, body, asAuthor(user), to);
       broadcast({ type: "deal", id });
-      return send(res, 201, comment);
+      return send(res, 201, listComments(id, viewer(req)).find((c) => c.id === newId));
     }
+  }
+
+  // a comment's own actions: delete, like, report, and an admin's review
+  if ((m = path.match(/^\/api\/comments\/(\d+)\/(delete|like|report|review)$/)) && method === "POST") {
+    const comment = getComment(Number(m[1]));
+    if (!comment || !getDeal(comment.dealId)) throw new HttpError(404, "no such comment");
+    const id = comment.id;
+    const dealOf = comment.dealId;
+    const action = m[2];
+
+    if (action === "delete") {
+      const user = need(req, "delete-own", "delete a comment");
+      if (comment.author.id !== user.id && !can(user.role, "delete-any")) {
+        throw new HttpError(403, "only the person who wrote this can delete it");
+      }
+      deleteComment(id);
+      broadcast({ type: "deal", id: dealOf });
+      return send(res, 200, { deleted: id });
+    }
+
+    if (action === "like") {
+      const user = need(req, "like", "like a comment");
+      if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
+      const b = await readJson(req);
+      if (typeof b.liked !== "boolean") throw new HttpError(400, "liked must be true or false");
+      if (likeComment(id, asAuthor(user), b.liked)) broadcast({ type: "deal", id: dealOf });
+      return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
+    }
+
+    if (action === "report") {
+      const user = need(req, "report", "report a comment");
+      if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
+      const { added, admins } = reportComment(id, asAuthor(user));
+      if (admins.length) {
+        broadcast({ type: "deal", id: dealOf });
+        for (const admin of admins) tell(admin, { type: "notice" });
+      }
+      return send(res, added ? 201 : 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
+    }
+
+    need(req, "moderate", "review a reported comment");
+    const b = await readJson(req);
+    const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    if (!reviewComment(id, decision)) throw new HttpError(409, "that comment isn't hidden");
+    broadcast({ type: "deal", id: dealOf });
+    return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
   }
 
   if (path.startsWith("/api/")) throw new HttpError(404, "not found");

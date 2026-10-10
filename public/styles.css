@@ -1052,6 +1052,81 @@ button.small {
   gap: 0.5rem;
 }
 
+/* a reply sits indented under the comment it belongs to, one level only */
+.comment-list li.reply {
+  margin-left: 1rem;
+}
+
+.comment-list .at {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.comment-list li.is-hidden > p:first-of-type {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.4rem;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+}
+
+.comment-actions button.small {
+  margin: 0;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.8rem;
+}
+
+.comment-actions .likes {
+  color: var(--muted);
+}
+
+.comment-actions .like[aria-pressed="true"] {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.comment-actions .hint {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.comment-confirm {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--accent-text);
+  border-radius: 6px;
+}
+
+.comment-confirm p {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+}
+
+.comment-confirm button {
+  margin: 0;
+}
+
+.replying {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.replying button {
+  margin: 0;
+}
+
 /* news about your posts */
 .notices {
   margin: 1rem 0;
