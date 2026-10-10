@@ -22,6 +22,7 @@ import {
   getComment,
   getDeal,
   listComments,
+  listReports,
   likeComment,
   liveDuplicate,
   proposeCorrection,
@@ -599,6 +600,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
   }
 
+  // an admin's inbox: reported comments not yet reviewed
+  if (method === "GET" && path === "/api/reports") {
+    need(req, "moderate", "see reports");
+    return send(res, 200, listReports());
+  }
+
   // a comment's own actions: delete, like, report, and an admin's review
   if ((m = path.match(/^\/api\/comments\/(\d+)\/(delete|like|report|review)$/)) && method === "POST") {
     const comment = getComment(Number(m[1]));
@@ -629,18 +636,16 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (action === "report") {
       const user = need(req, "report", "report a comment");
       if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
-      const { added, admins } = reportComment(id, asAuthor(user));
-      if (admins.length) {
-        broadcast({ type: "deal", id: dealOf });
-        for (const admin of admins) tell(admin, { type: "notice" });
-      }
+      const { added, hidden, admins } = reportComment(id, asAuthor(user));
+      if (hidden) broadcast({ type: "deal", id: dealOf });
+      for (const admin of admins) tell(admin, { type: "notice" }); // their inbox changed
       return send(res, added ? 201 : 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
     }
 
     need(req, "moderate", "review a reported comment");
     const b = await readJson(req);
     const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
-    if (!reviewComment(id, decision)) throw new HttpError(409, "that comment isn't hidden");
+    if (!reviewComment(id, decision)) throw new HttpError(409, "nothing to review on that comment");
     broadcast({ type: "deal", id: dealOf });
     return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
   }

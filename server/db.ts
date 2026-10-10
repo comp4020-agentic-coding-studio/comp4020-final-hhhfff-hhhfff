@@ -794,20 +794,23 @@ export function likeComment(id: number, who: Author, like: boolean): boolean {
 // One report per person per comment. The report that brings this round to
 // REPORT_THRESHOLD hides the comment and tells every admin, in the same
 // transaction as the count, so two reports at once can't both do it or miss it.
-export function reportComment(id: number, who: Author): { added: boolean; admins: string[] } {
+// `admins` is everyone to tell that the reports inbox changed; `hidden` says
+// this report was the one that hid the comment.
+export function reportComment(id: number, who: Author): { added: boolean; hidden: boolean; admins: string[] } {
   return tx(() => {
     const c = db.prepare(`SELECT * FROM comments WHERE id = ?`).get(id) as Row;
     const added = db
       .prepare(`INSERT OR IGNORE INTO comment_reports (comment_id, author_id, round, created_at) VALUES (?, ?, ?, ?)`)
       .run(id, who.id, c.report_round as number, now()).changes > 0;
-    if (!added || c.hidden) return { added, admins: [] };
+    if (!added) return { added, hidden: false, admins: [] };
+    const admins = (db.prepare(`SELECT id FROM users WHERE role = 'admin'`).all() as { id: string }[]).map((a) => a.id);
+    if (c.hidden) return { added, hidden: false, admins };
     const { n } = db
       .prepare(`SELECT count(*) AS n FROM comment_reports WHERE comment_id = ? AND round = ?`)
       .get(id, c.report_round as number) as { n: number };
-    if (n < REPORT_THRESHOLD) return { added, admins: [] };
+    if (n < REPORT_THRESHOLD) return { added, hidden: false, admins };
     db.prepare(`UPDATE comments SET hidden = 'reported' WHERE id = ?`).run(id);
     const deal = db.prepare(`SELECT item FROM deals WHERE id = ?`).get(c.deal_id as number) as { item: string };
-    const admins = (db.prepare(`SELECT id FROM users WHERE role = 'admin'`).all() as { id: string }[]).map((a) => a.id);
     const tell = db.prepare(
       `INSERT INTO notifications (author_id, deal_id, comment_id, text, created_at) VALUES (?, ?, ?, ?, ?)`,
     );
@@ -816,15 +819,49 @@ export function reportComment(id: number, who: Author): { added: boolean; admins
         `${n} people reported ${c.author_name}'s comment on "${deal.item}": "${c.body}". ` +
           `It's hidden until you restore it or keep it hidden.`, now());
     }
-    return { added, admins };
+    return { added, hidden: true, admins };
   });
 }
 
-// An admin's call on a hidden comment: restore it (the count starts again)
-// or keep it hidden. False if it isn't hidden.
+// Something to review: a comment hidden by reports, or one with reports
+// since an admin last looked. Restoring clears the reports (the count starts
+// again) and shows it; keeping hides it, before ten reports if need be.
+// False if there was nothing to review.
+const UNREVIEWED = `(hidden = 'reported' OR EXISTS (
+  SELECT 1 FROM comment_reports r WHERE r.comment_id = comments.id AND r.round = comments.report_round))`;
+
 export function reviewComment(id: number, decision: "restore" | "keep"): boolean {
   const sql = decision === "restore"
-    ? `UPDATE comments SET hidden = NULL, report_round = report_round + 1 WHERE id = ? AND hidden IS NOT NULL`
-    : `UPDATE comments SET hidden = 'kept' WHERE id = ? AND hidden IS NOT NULL`;
+    ? `UPDATE comments SET hidden = NULL, report_round = report_round + 1 WHERE id = ? AND ${UNREVIEWED}`
+    : `UPDATE comments SET hidden = 'kept', report_round = report_round + 1 WHERE id = ? AND ${UNREVIEWED}`;
   return db.prepare(sql).run(id).changes > 0;
+}
+
+export interface ReportedComment {
+  comment: Comment; // as an admin sees it
+  deal: { id: number; item: string; storeId: string };
+}
+
+// The admin's inbox: live comments on live deals with something to review,
+// those already hidden first, then the most reported.
+export function listReports(): ReportedComment[] {
+  const rows = db
+    .prepare(
+      `SELECT comments.id, comments.deal_id, d.item, d.store_id,
+         (SELECT count(*) FROM comment_reports r WHERE r.comment_id = comments.id AND r.round = comments.report_round) AS n
+       FROM comments JOIN deals d ON d.id = comments.deal_id
+       WHERE comments.deleted_at IS NULL AND d.deleted_at IS NULL AND ${UNREVIEWED}
+       ORDER BY comments.hidden = 'reported' DESC, n DESC, comments.id`,
+    )
+    .all() as Row[];
+  const admin: Viewer = { id: "", admin: true };
+  const byDeal = new Map<number, Comment[]>();
+  return rows.map((r) => {
+    const dealId = r.deal_id as number;
+    if (!byDeal.has(dealId)) byDeal.set(dealId, listComments(dealId, admin));
+    return {
+      comment: byDeal.get(dealId)!.find((c) => c.id === r.id)!,
+      deal: { id: dealId, item: r.item as string, storeId: r.store_id as string },
+    };
+  });
 }

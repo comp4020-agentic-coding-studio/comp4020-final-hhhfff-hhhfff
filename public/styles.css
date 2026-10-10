@@ -1052,6 +1052,44 @@ button.small {
   gap: 0.5rem;
 }
 
+/* an admin's inbox of reported comments: one line until opened */
+.reports {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.9rem;
+  border-color: var(--tint-line);
+}
+
+.reports summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.reports-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.report-item {
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.report-item p {
+  margin: 0 0 0.2rem;
+}
+
+.report-item .where button {
+  margin: 0 0 0 0.25rem;
+}
+
+.report-body {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  background: var(--soft);
+  overflow-wrap: anywhere;
+}
+
 /* a reply sits indented under the comment it belongs to, one level only */
 .comment-list li.reply {
   margin-left: 1rem;
@@ -1925,6 +1963,7 @@ button.danger {
   /* the controls sit in a centred column above the feed; the post button
      spans the feed itself, edge to edge with its outer cards */
   .notices,
+  .reports,
   .me,
   .filters,
   .post,

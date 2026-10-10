@@ -30,6 +30,12 @@
     <main class="wrap">
       <section id="notices" class="notices" aria-live="polite" aria-label="News about your posts" hidden></section>
 
+      <!-- admins only: reported comments waiting for a decision, folded to one line -->
+      <details id="reports" class="card reports" hidden>
+        <summary id="reports-summary">Reports to review</summary>
+        <ol id="reports-list" class="reports-list"></ol>
+      </details>
+
       <!-- reading needs no account, so this stays folded until someone wants to write -->
       <section id="account" class="card account" aria-labelledby="account-heading" hidden>
         <div class="post-head">

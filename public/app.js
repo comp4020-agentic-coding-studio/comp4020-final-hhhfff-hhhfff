@@ -174,6 +174,7 @@ showTheme();
 // --- notifications: what happened to my posts while I was away
 
 async function loadNotices() {
+  loadReports();
   if (!me) return;
   try {
     const notes = await api("/api/notifications", {});
@@ -202,6 +203,7 @@ async function loadNotices() {
             try {
               await api(`/api/comments/${n.commentId}/review`, { decision });
               p.textContent = decision === "restore" ? "Restored: everyone can see it again." : "Kept hidden.";
+              loadReports();
             } catch (err) {
               p.textContent = `Couldn't do that: ${err.message}`;
             }
@@ -798,6 +800,89 @@ function plusOne(id) {
   setTimeout(() => plus.remove(), 1200); // not on animationend, which reduced motion never fires
 }
 
+// --- an admin's inbox: reported comments waiting for a decision, hidden ones
+// first. It stays until each is restored, hidden or deleted, unlike a notice.
+
+async function loadReports() {
+  const box = $("#reports");
+  if (!isAdmin()) {
+    box.hidden = true;
+    return;
+  }
+  let reports;
+  try {
+    reports = await api("/api/reports");
+  } catch {
+    return; // tried again on the next notice or visit
+  }
+  const hidden = reports.filter((r) => r.comment.hidden).length;
+  $("#reports-summary").textContent = reports.length
+    ? `Reports to review · ${reports.length}${hidden ? ` (${hidden} hidden)` : ""}`
+    : "Reports to review: none";
+  $("#reports-list").replaceChildren(...reports.map(reportItem));
+  box.hidden = false;
+}
+
+function reportItem({ comment: c, deal }) {
+  const item = document.createElement("li");
+  item.className = "report-item";
+  const store = storeById().get(deal.storeId);
+  const where = document.createElement("p");
+  where.className = "where";
+  const title = document.createElement("b");
+  title.textContent = deal.item;
+  const show = document.createElement("button");
+  show.type = "button";
+  show.className = "quiet small";
+  show.textContent = "Show post";
+  show.addEventListener("click", () => showDeal(deal));
+  where.append(title, ` · ${store ? store.name : deal.storeId} `, show);
+
+  const who = document.createElement("p");
+  who.className = "hint";
+  who.textContent = `${nameOf(c.author)} · ${ago(c.createdAt)} · ${c.reports} ${c.reports === 1 ? "report" : "reports"}` +
+    (c.hidden ? " · hidden" : "");
+  const body = document.createElement("p");
+  body.className = "report-body";
+  if (c.replyTo) body.append(`@${nameOf(c.replyTo)} `);
+  body.append(c.body);
+
+  const bar = document.createElement("div");
+  bar.className = "comment-actions";
+  const act = (path, payload) => api(path, payload).then(loadReports, (err) => alertIn(item, err.message));
+  for (const [text, cls, run] of [
+    [c.hidden ? "Restore" : "Dismiss reports", "quiet", () => act(`/api/comments/${c.id}/review`, { decision: "restore" })],
+    [c.hidden ? "Keep hidden" : "Hide it", "quiet", () => act(`/api/comments/${c.id}/review`, { decision: "keep" })],
+    ["Delete", "quiet", () => ask(item, "Delete this comment, and any replies to it?", "Yes, delete",
+      () => act(`/api/comments/${c.id}/delete`, {}))],
+  ]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `${cls} small`;
+    b.textContent = text;
+    b.addEventListener("click", run);
+    bar.append(b);
+  }
+  item.append(where, who, body, bar);
+  return item;
+}
+
+// brings a post into the feed (searching for it if it isn't on this page)
+// and opens its comments
+async function showDeal(deal) {
+  if (!document.getElementById(`deal-${deal.id}`)) {
+    $("#store-filter").value = "";
+    $("#search").value = deal.item;
+    page = 1;
+    syncAddress(true);
+    await loadFeed();
+  }
+  const card = document.getElementById(`deal-${deal.id}`);
+  if (!card) return;
+  $("details.comments", card).open = true;
+  jumpTo(deal.id);
+}
+
 // --- comments: one level of replies (a reply to a reply sits under the same
 // comment, "@" whom it answers), likes, reports, and deleting your own along
 // with everything that answers it. A comment ten people reported is hidden
@@ -856,7 +941,10 @@ function commentItem(c, all, dealId, li) {
     bar.append(b);
     return b;
   };
-  const done = () => loadComments(dealId, li);
+  const done = () => {
+    loadComments(dealId, li);
+    loadReports(); // a review or delete here settles it in the inbox too
+  };
   const send = (path, body) => api(path, body).then(done, (err) => alertIn(item, err.message));
   const mine = isMe(c.author);
 
@@ -1052,6 +1140,7 @@ $("#logout").addEventListener("click", async () => {
   me = null;
   $("#notices").replaceChildren();
   $("#notices").hidden = true;
+  $("#reports").hidden = true;
   closePost();
   showMe();
   connectLive();
@@ -1773,6 +1862,8 @@ if (mapWasClosed()) showMap(false, { remember: false });
 
 function onLive(ev) {
   if (ev.type !== "notice") refreshMapSoon();
+  // another admin's review or a deleted comment changes the inbox too
+  if (isAdmin() && (ev.type === "deal" || ev.type === "deleted")) loadReports();
   if (ev.type === "notice") loadNotices();
   else if (ev.type === "deleted") removeCard(ev.id);
   else if (ev.type === "new") newPostWaiting(ev.id);

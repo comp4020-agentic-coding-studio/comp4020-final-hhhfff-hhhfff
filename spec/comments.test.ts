@@ -105,15 +105,7 @@ describe.skipIf(!writes)("comments", () => {
   // Needs an app started with this name in ADMIN_USERS (see accounts.test.ts).
   const adminName = inject("adminUser");
   it.skipIf(!adminName)("an admin is told once, sees it, and restores it (the count starts again) or keeps it hidden", async () => {
-    const enter = (path: string) => fetch(new URL(path, baseUrl), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: adminName, password: "spec-password-1" }),
-    });
-    let res = await enter("/api/register");
-    if (res.status !== 201) res = await enter("/api/login");
-    expect(await res.json()).toMatchObject({ role: "admin" });
-    const admin = { cookie: (res.headers.get("set-cookie") ?? "").split(";")[0] };
+    const admin = await adminSession(adminName);
 
     const [poster, writer] = await Promise.all(["spec poster", "spec writer"].map(person));
     const reporters = await Promise.all(Array.from({ length: 12 }, (_, i) => person(`spec reporter ${i}`)));
@@ -142,4 +134,50 @@ describe.skipIf(!writes)("comments", () => {
     // and an admin can delete anyone's comment
     expect((await act(c2.id, "delete", {}, admin)).status).toBe(200);
   });
+
+  it("reports wait in an admin-only inbox, hidden ones first, until an admin restores, hides or deletes them", async () => {
+    const [poster, writer, plainUser] = await Promise.all(["spec poster", "spec writer", "spec user"].map(person));
+    expect((await call("/api/reports")).status).toBe(401);
+    expect((await call("/api/reports", undefined, plainUser.as)).status).toBe(403);
+    if (!adminName) return; // the rest needs an admin (see accounts.test.ts)
+    const admin = await adminSession(adminName);
+
+    const reporters = await Promise.all(Array.from({ length: 10 }, (_, i) => person(`spec reporter ${i}`)));
+    const { data: deal } = await call("/api/deals", special(poster));
+    const [one, two, many] = await Promise.all(["one report", "two reports", "ten reports"].map(
+      async (body) => (await comment(deal.id, writer, body)).data,
+    ));
+    await act(one.id, "report", {}, reporters[0].as);
+    await Promise.all(reporters.slice(0, 2).map((r) => act(two.id, "report", {}, r.as)));
+    await Promise.all(reporters.map((r) => act(many.id, "report", {}, r.as)));
+
+    const inbox = async () =>
+      ((await call("/api/reports", undefined, admin)).data as any[]).filter((x) => x.deal.id === deal.id);
+    expect((await inbox()).map((x) => [x.comment.body, x.comment.reports, x.comment.hidden])).toEqual([
+      ["ten reports", 10, "reported"],
+      ["two reports", 2, null],
+      ["one report", 1, null],
+    ]);
+    expect((await inbox())[0].deal).toMatchObject({ id: deal.id, item: deal.item, storeId: deal.storeId });
+
+    // each way of dealing with one takes it out of the inbox
+    expect((await act(many.id, "review", { decision: "restore" }, admin)).data).toMatchObject({ hidden: null });
+    expect((await act(two.id, "review", { decision: "keep" }, admin)).data).toMatchObject({ hidden: "kept" });
+    expect((await list(deal.id)).find((x) => x.id === two.id)).toMatchObject({ body: null }); // hidden before ten
+    expect((await act(one.id, "delete", {}, admin)).status).toBe(200);
+    expect(await inbox()).toEqual([]);
+    expect((await act(two.id, "review", { decision: "keep" }, admin)).status).toBe(409);
+  });
 });
+
+async function adminSession(name: string): Promise<{ cookie: string }> {
+  const enter = (path: string) => fetch(new URL(path, baseUrl), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ username: name, password: "spec-password-1" }),
+  });
+  let res = await enter("/api/register");
+  if (res.status !== 201) res = await enter("/api/login");
+  expect(await res.json()).toMatchObject({ role: "admin" });
+  return { cookie: (res.headers.get("set-cookie") ?? "").split(";")[0] };
+}
