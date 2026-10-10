@@ -51,7 +51,8 @@ Only the poster, or an admin, can delete a post.
 Enforced, by tests in `spec/` against the running app: duplicate refusal,
 including simultaneous posts; the confirmation and three-person correction
 rules; poster-only delete; admins only from `ADMIN_USERS`; the price check;
-the stock-report limit; comment replies, likes, deleting with replies, and
+the stock-report limit; shelf photos (poster only, JPEG only, metadata
+stripped, gone with their post, hidden after ten reports); comment replies, likes, deleting with replies, and
 the ten-report hide with an admin's review and inbox, including reports at once;
 guests being read-only; logins across browsers; no
 password or session token leaking; typo-tolerant search; every live post
@@ -74,6 +75,17 @@ it with strangers.
 
 The shop list and the street map come from OpenStreetMap, taken once, not fetched at runtime. Each post records where the poster
 saw it, so readers can weigh it.
+
+A post may also carry one photo of the shelf tag. I first left photos out
+as friction and a claim the app cannot check. But a markdown sticker shows
+the price, the item and often how much is left in one glance, which is
+exactly what a reader weighs before the walk, and it stays optional, so
+nobody in a hurry is slowed. The app still cannot check a photo; it gives
+readers evidence to judge, like where the poster saw it. The phone shrinks
+and re-encodes it before sending, and the server takes only a JPEG and
+strips its metadata, so it never reveals where it was taken. Ten people
+reporting a photo hide it until an admin looks, and it goes when its post
+is deleted or a week after the special ends.
 
 I chose not to build email login, password reset, receipt photos,
 price-history charts or website scraping: each adds friction or a claim

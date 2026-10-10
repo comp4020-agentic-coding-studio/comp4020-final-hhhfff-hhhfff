@@ -137,6 +137,18 @@
               <option value="word-of-mouth">Someone told me</option>
             </select>
           </label>
+          <!-- shrunk and re-encoded on the phone before it is sent, which also drops where it was taken -->
+          <div class="wide photo-field">
+            <label>Photo of the shelf tag <span class="optional">(optional)</span>
+              <input name="photo" type="file" accept="image/*" />
+            </label>
+            <p class="hint">One picture showing the price, what's left and the item helps the next person trust it. Location data is removed.</p>
+            <div class="photo-preview" hidden>
+              <img alt="Your photo, as it will be posted" />
+              <span class="hint photo-size"></span>
+              <button type="button" class="quiet small" id="photo-remove">Remove photo</button>
+            </div>
+          </div>
         </div>
         <p class="error" role="alert" id="post-error"></p>
         <button type="submit">Post it</button>
@@ -234,6 +246,18 @@
       </div>
     </main>
 
+    <!-- a shelf photo at full size, with what can be done about it -->
+    <dialog id="photo-view" class="photo-view" aria-labelledby="photo-view-caption">
+      <img alt="" />
+      <p id="photo-view-caption" class="hint"></p>
+      <p class="error" role="alert" id="photo-view-error"></p>
+      <div class="actions">
+        <button type="button" class="quiet small" id="photo-report" hidden>Report photo</button>
+        <button type="button" class="quiet small" id="photo-delete" hidden>Remove photo</button>
+        <button type="button" class="small" id="photo-close">Close</button>
+      </div>
+    </dialog>
+
     <template id="deal-template">
       <li class="card deal">
         <div class="deal-head">
@@ -242,6 +266,11 @@
           <p class="ends-soon" hidden></p>
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
+        <!-- the shelf photo, small until pressed; or a note when it is hidden -->
+        <div class="photo-row" hidden>
+          <button type="button" class="photo-thumb"><img alt="" loading="lazy" decoding="async" /><span class="photo-caption"></span></button>
+          <p class="hint photo-note" hidden></p>
+        </div>
         <p class="meta"></p>
         <!-- how much is left: three levels, only the reported one lit; pressing
              one reports it, sold out sits apart -->
@@ -295,6 +324,8 @@
           </form>
         </details>
         <div class="delete" hidden>
+          <button type="button" class="quiet small add-photo" hidden>Add a photo</button>
+          <input type="file" accept="image/*" class="add-photo-file" hidden aria-label="Choose a photo" />
           <button type="button" class="quiet small delete-start">Delete my post</button>
           <div class="delete-confirm" role="group" aria-label="Confirm deleting this post" hidden>
             <p class="delete-warning"></p>

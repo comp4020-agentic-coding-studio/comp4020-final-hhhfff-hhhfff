@@ -23,18 +23,26 @@ import {
   getDeal,
   listComments,
   listReports,
+  photoBytes,
+  photoData,
+  PHOTO_BUDGET_BYTES,
   likeComment,
   liveDuplicate,
   proposeCorrection,
+  removePhoto,
   reportComment,
+  reportPhoto,
   reportStock,
   reviewComment,
+  reviewPhoto,
   setAdmins,
+  setPhoto,
   similarDeals,
   SOURCES,
   startSession,
   STOCK_LEVELS,
   stockWait,
+  sweepPhotos,
   takeNotifications,
   userForToken,
   type Author,
@@ -47,6 +55,7 @@ import {
   type Viewer,
 } from "./db.ts";
 import { itemKey, searchScore, searchTerms } from "./match.ts";
+import { cleanJpeg } from "./photos.ts";
 import { type Store, STORES, storeById } from "./stores.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -300,6 +309,30 @@ function dealId(raw: string): number {
 }
 
 // --- plumbing
+
+// A shelf photo's bytes. The page sends about 300 KB at most; this leaves room.
+const MAX_PHOTO = 600 * 1024;
+// Past the limit the rest is read and dropped rather than the stream torn
+// down, so the 413 still reaches the sender.
+function readBody(req: IncomingMessage, limit: number): Promise<Buffer> {
+  const tooLarge = () => new HttpError(413, "that photo is too large");
+  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.reject(tooLarge());
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let over = false;
+    req.on("data", (chunk: Buffer) => {
+      if (over) return;
+      size += chunk.length;
+      if (size <= limit) return void chunks.push(chunk);
+      over = true;
+      chunks.length = 0;
+      reject(tooLarge());
+    });
+    req.on("end", () => over || resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
 
 async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
   let size = 0;
@@ -600,6 +633,75 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
   }
 
+  // --- a deal's shelf photo: the picture, and adding, removing, reporting and reviewing it
+  if ((m = path.match(/^\/api\/deals\/(\d+)\/photo(?:\/(delete|report|review))?$/))) {
+    const id = dealId(m[1]);
+    const deal = getDeal(id)!;
+    const action = m[2];
+
+    if (method === "GET" && !action) {
+      const photo = photoData(id);
+      // a hidden photo is only for an admin, and never kept in a cache
+      if (!photo || (photo.hidden && !can(whoIs(req)?.role ?? "guest", "moderate"))) {
+        throw new HttpError(404, "no photo");
+      }
+      res.writeHead(200, {
+        "content-type": "image/jpeg",
+        "content-length": String(photo.data.length),
+        "x-content-type-options": "nosniff",
+        // the page asks for ?v=<when it was added>, so a replaced photo is a new address
+        "cache-control": photo.hidden ? "no-store" : "public, max-age=86400",
+      });
+      res.end(photo.data);
+      return;
+    }
+    if (method !== "POST") throw new HttpError(405, "method not allowed");
+
+    if (!action) {
+      const user = need(req, "post", "add a photo");
+      if (deal.author.id !== user.id) throw new HttpError(403, "only the person who posted this can add its photo");
+      if ((req.headers["content-type"] ?? "").split(";")[0].trim() !== "image/jpeg") {
+        throw new HttpError(400, "the photo must be sent as image/jpeg");
+      }
+      const jpeg = cleanJpeg(await readBody(req, MAX_PHOTO));
+      if (!jpeg) throw new HttpError(400, "that isn't a JPEG photo this app can use");
+      if (photoBytes() + jpeg.data.length > PHOTO_BUDGET_BYTES) {
+        throw new HttpError(503, "there's no room for more photos right now; post without one");
+      }
+      setPhoto(id, jpeg.data, jpeg.width, jpeg.height, asAuthor(user));
+      broadcast({ type: "deal", id });
+      return send(res, 201, getDeal(id));
+    }
+
+    if (!deal.photo) throw new HttpError(404, "no photo");
+
+    if (action === "delete") {
+      const user = need(req, "delete-own", "remove a photo");
+      if (deal.author.id !== user.id && !can(user.role, "delete-any")) {
+        throw new HttpError(403, "only the person who posted this can remove its photo");
+      }
+      removePhoto(id);
+      broadcast({ type: "deal", id });
+      return send(res, 200, getDeal(id));
+    }
+
+    if (action === "report") {
+      const user = need(req, "report", "report a photo");
+      if (deal.author.id === user.id) throw new HttpError(400, "that's your own photo");
+      const { added, hidden, admins } = reportPhoto(id, asAuthor(user));
+      if (hidden) broadcast({ type: "deal", id });
+      for (const admin of admins) tell(admin, { type: "notice" });
+      return send(res, added ? 201 : 200, { reported: true, deal: getDeal(id) });
+    }
+
+    need(req, "moderate", "review a reported photo");
+    const b = await readJson(req);
+    const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    if (!reviewPhoto(id, decision)) throw new HttpError(409, "nothing to review on that photo");
+    broadcast({ type: "deal", id });
+    return send(res, 200, getDeal(id));
+  }
+
   // an admin's inbox: reported comments not yet reviewed
   if (method === "GET" && path === "/api/reports") {
     need(req, "moderate", "see reports");
@@ -676,6 +778,11 @@ const server = createServer((req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => console.log(`listening on 0.0.0.0:${PORT}`));
+
+// photos of deleted deals, and of deals a week past their end, are cleared
+// at startup and then hourly, so the volume holds only photos still worth seeing
+sweepPhotos(todayInCanberra());
+setInterval(() => sweepPhotos(todayInCanberra()), 3_600_000).unref();
 
 // every write is already committed, so there's nothing to flush on the way out
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

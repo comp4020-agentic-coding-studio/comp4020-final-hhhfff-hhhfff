@@ -575,7 +575,9 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   off.dataset.depth = pct >= 50 ? "huge" : pct >= 35 ? "big" : pct >= 20 ? "mid" : "small";
   $(".meta", li).textContent = `${SOURCE_TEXT[d.source]} · ${endsText(d.endsOn)} · by ${nameOf(d.author)}, ${ago(d.createdAt)}`;
 
+  paintPhoto(li, d);
   if (isMe(d.author) || isAdmin()) wireDelete(d, li);
+  if (isMe(d.author)) wireAddPhoto(li, d);
   if (!isMe(d.author)) $(".delete-start", li).textContent = "Delete post (admin)";
 
   // How much is left: of the three levels only the reported one is lit (the
@@ -800,6 +802,148 @@ function plusOne(id) {
   setTimeout(() => plus.remove(), 1200); // not on animationend, which reduced motion never fires
 }
 
+// --- shelf photos: one per post. Shrunk and re-encoded as a JPEG here, on
+// the phone, before it is sent: small enough for a slow connection and the
+// server's disk, and the re-encoding drops the location the camera wrote
+// into it (the server drops metadata again in case a photo comes some other way).
+
+const PHOTO_SIDE = 1280; // longest side, in pixels
+const PHOTO_TARGET = 300 * 1024; // bytes; the server takes up to 600 KB
+
+async function shrinkPhoto(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    throw new Error("Couldn't read that photo. Try a JPEG or PNG, or take it again.");
+  }
+  let scale = Math.min(1, PHOTO_SIDE / Math.max(bitmap.width, bitmap.height));
+  for (;;) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.82, 0.72, 0.6]) {
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", quality));
+      if (blob && blob.size <= PHOTO_TARGET) return blob;
+    }
+    scale *= 0.75; // still too large: smaller, and try again
+    if (canvas.width < 320) throw new Error("That photo couldn't be made small enough to send.");
+  }
+}
+
+// sends a photo for a post; the answer is the post as it now is
+async function uploadPhoto(dealId, blob) {
+  const res = await fetch(`/api/deals/${dealId}/photo`, { method: "POST", headers: { "content-type": "image/jpeg" }, body: blob });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error ?? `the photo didn't upload (${res.status})`);
+  return data;
+}
+
+const photoUrl = (d) => `/api/deals/${d.id}/photo?v=${encodeURIComponent(d.photo.at)}`;
+
+// the thumbnail on a card, or a note in its place when it's hidden
+function paintPhoto(li, d) {
+  const row = $(".photo-row", li);
+  const thumb = $(".photo-thumb", row);
+  const note = $(".photo-note", row);
+  row.hidden = !d.photo;
+  if (!d.photo) return;
+  const canSee = !d.photo.hidden || isAdmin();
+  thumb.hidden = !canSee;
+  note.hidden = canSee && !d.photo.hidden;
+  note.textContent = d.photo.hidden === "kept" ? "Photo hidden by an admin." : "Photo hidden after reports, waiting for an admin.";
+  if (!canSee) return;
+  const img = $("img", thumb);
+  img.src = photoUrl(d);
+  img.width = d.photo.width;
+  img.height = d.photo.height;
+  // a correction since the photo was taken may make the tag in it out of date
+  const correctedSince = d.history.some((h) => h.at > d.photo.at);
+  $(".photo-caption", thumb).textContent = correctedSince ? "Shelf photo · taken before a correction" : "Shelf photo";
+  thumb.setAttribute("aria-label", `Shelf photo of ${d.item}${correctedSince ? ", taken before a correction" : ""}. Show it larger`);
+  thumb.addEventListener("click", () => showPhoto(d));
+}
+
+// the photo at full size, with a report button (others) or remove (poster, admin)
+const photoView = $("#photo-view");
+let viewing = null;
+
+function showPhoto(d) {
+  viewing = d;
+  $("img", photoView).src = photoUrl(d);
+  $("img", photoView).alt = `Shelf photo of ${d.item}`;
+  $("#photo-view-caption").textContent = `${d.item} · photo by ${nameOf(d.author)}, ${ago(d.photo.at)}`;
+  $("#photo-view-error").textContent = "";
+  $("#photo-report").hidden = !me || isMe(d.author) || !!d.photo.hidden;
+  $("#photo-report").textContent = "Report photo";
+  $("#photo-report").disabled = false;
+  $("#photo-delete").hidden = !me || !(isMe(d.author) || isAdmin());
+  photoView.showModal();
+}
+
+$("#photo-close").addEventListener("click", () => photoView.close());
+// a press on the dimmed backdrop, outside the photo's box, closes it
+photoView.addEventListener("click", (e) => e.target === photoView && photoView.close());
+
+$("#photo-report").addEventListener("click", async () => {
+  const b = $("#photo-report");
+  if (b.textContent === "Report photo") {
+    b.textContent = "Yes, report it as wrong or inappropriate";
+    return;
+  }
+  try {
+    await api(`/api/deals/${viewing.id}/photo/report`, {});
+    b.textContent = "Reported. Ten reports hide it until an admin looks.";
+    b.disabled = true;
+  } catch (err) {
+    $("#photo-view-error").textContent = err.message;
+  }
+});
+
+$("#photo-delete").addEventListener("click", async () => {
+  const b = $("#photo-delete");
+  if (b.textContent === "Remove photo") {
+    b.textContent = "Yes, remove it";
+    return;
+  }
+  try {
+    const d = await api(`/api/deals/${viewing.id}/photo/delete`, {});
+    photoView.close();
+    replaceDeal(d);
+    loadReports();
+  } catch (err) {
+    $("#photo-view-error").textContent = err.message;
+  }
+});
+photoView.addEventListener("close", () => {
+  $("#photo-delete").textContent = "Remove photo";
+  viewing = null;
+});
+
+// The poster can add a photo after posting, or replace it.
+function wireAddPhoto(li, d) {
+  const button = $(".add-photo", li);
+  const input = $(".add-photo-file", li);
+  button.hidden = false;
+  button.textContent = d.photo ? "Replace photo" : "Add a photo";
+  button.addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const file = input.files[0];
+    if (!file) return;
+    button.disabled = true;
+    button.textContent = "Sending the photo…";
+    try {
+      replaceDeal(await uploadPhoto(d.id, await shrinkPhoto(file)));
+    } catch (err) {
+      button.disabled = false;
+      button.textContent = d.photo ? "Replace photo" : "Add a photo";
+      alertIn($(".delete", li), err.message);
+    }
+  });
+}
+
+
 // --- an admin's inbox: reported comments waiting for a decision, hidden ones
 // first. It stays until each is restored, hidden or deleted, unlike a notice.
 
@@ -815,7 +959,7 @@ async function loadReports() {
   } catch {
     return; // tried again on the next notice or visit
   }
-  const hidden = reports.filter((r) => r.comment.hidden).length;
+  const hidden = reports.filter((r) => (r.kind === "photo" ? r.photo : r.comment).hidden).length;
   $("#reports-summary").textContent = reports.length
     ? `Reports to review · ${reports.length}${hidden ? ` (${hidden} hidden)` : ""}`
     : "Reports to review: none";
@@ -823,7 +967,55 @@ async function loadReports() {
   box.hidden = false;
 }
 
-function reportItem({ comment: c, deal }) {
+const reportItem = (r) => (r.kind === "photo" ? photoReportItem(r) : commentReportItem(r));
+
+// a reported photo: the picture (an admin can load it even hidden) and what to do with it
+function photoReportItem({ photo, deal }) {
+  const item = document.createElement("li");
+  item.className = "report-item";
+  const store = storeById().get(deal.storeId);
+  const where = document.createElement("p");
+  where.className = "where";
+  const title = document.createElement("b");
+  title.textContent = deal.item;
+  const show = document.createElement("button");
+  show.type = "button";
+  show.className = "quiet small";
+  show.textContent = "Show post";
+  show.addEventListener("click", () => showDeal(deal));
+  where.append(title, ` · ${store ? store.name : deal.storeId} `, show);
+  const who = document.createElement("p");
+  who.className = "hint";
+  who.textContent = `Shelf photo · ${ago(photo.at)} · ${photo.reports} ${photo.reports === 1 ? "report" : "reports"}` +
+    (photo.hidden ? " · hidden" : "");
+  const img = document.createElement("img");
+  img.className = "report-photo";
+  img.alt = `Reported photo on ${deal.item}`;
+  img.src = `/api/deals/${deal.id}/photo?v=${encodeURIComponent(photo.at)}`;
+  img.width = photo.width;
+  img.height = photo.height;
+
+  const bar = document.createElement("div");
+  bar.className = "comment-actions";
+  const act = (path, payload) => api(path, payload).then(loadReports, (err) => alertIn(item, err.message));
+  for (const [text, run] of [
+    [photo.hidden ? "Restore" : "Dismiss reports", () => act(`/api/deals/${deal.id}/photo/review`, { decision: "restore" })],
+    [photo.hidden ? "Keep hidden" : "Hide it", () => act(`/api/deals/${deal.id}/photo/review`, { decision: "keep" })],
+    ["Remove photo", () => ask(item, "Remove this photo from the post?", "Yes, remove",
+      () => act(`/api/deals/${deal.id}/photo/delete`, {}))],
+  ]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "quiet small";
+    b.textContent = text;
+    b.addEventListener("click", run);
+    bar.append(b);
+  }
+  item.append(where, who, img, bar);
+  return item;
+}
+
+function commentReportItem({ comment: c, deal }) {
   const item = document.createElement("li");
   item.className = "report-item";
   const store = storeById().get(deal.storeId);
@@ -1150,6 +1342,39 @@ $("#logout").addEventListener("click", async () => {
 // --- posting a special: check for one already in the feed first
 
 const post = $("#post");
+
+// the post form's photo: shrunk as soon as it's picked, so the preview shows what will be sent
+let draftPhoto = null;
+const photoInput = post.elements.photo;
+const photoPreview = $(".photo-preview", post);
+
+function clearDraftPhoto() {
+  draftPhoto = null;
+  photoInput.value = "";
+  const img = $("img", photoPreview);
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.removeAttribute("src");
+  photoPreview.hidden = true;
+}
+
+photoInput.addEventListener("change", async () => {
+  const file = photoInput.files[0];
+  $("#post-error").textContent = "";
+  if (!file) return clearDraftPhoto();
+  try {
+    $(".photo-size", photoPreview).textContent = "Shrinking…";
+    photoPreview.hidden = false;
+    draftPhoto = await shrinkPhoto(file);
+    const img = $("img", photoPreview);
+    if (img.src) URL.revokeObjectURL(img.src);
+    img.src = URL.createObjectURL(draftPhoto);
+    $(".photo-size", photoPreview).textContent = `${Math.round(draftPhoto.size / 1024)} KB to send`;
+  } catch (err) {
+    clearDraftPhoto();
+    $("#post-error").textContent = err.message;
+  }
+});
+$("#photo-remove").addEventListener("click", clearDraftPhoto);
 const similar = $("#similar");
 let draft = null; // the special being posted, while #similar asks about it
 
@@ -1386,11 +1611,20 @@ $("#similar-cancel").addEventListener("click", () => {
 
 async function publish() {
   try {
-    const deal = await api("/api/deals", draft);
+    let deal = await api("/api/deals", draft);
     notWaiting(deal.id);
+    // the post is in either way; a photo that won't go can be added from the card
+    let photoProblem = "";
+    if (draftPhoto) {
+      try {
+        deal = await uploadPhoto(deal.id, draftPhoto);
+      } catch (err) {
+        photoProblem = ` The photo didn't go (${err.message}); use "Add a photo" on your post to try again.`;
+      }
+    }
     clearPost();
     replaceOrAdd(deal);
-    closeSimilar(`Posted “${deal.item}”.`);
+    closeSimilar(`Posted “${deal.item}”.${photoProblem}`);
     jumpTo(deal.id);
     glow(deal.id, "landed");
   } catch (err) {
@@ -1405,6 +1639,7 @@ async function publish() {
 
 function clearPost() {
   for (const name of ["product", "was", "now", "endsOn"]) post.elements[name].value = "";
+  clearDraftPhoto();
 }
 
 function replaceOrAdd(deal) {

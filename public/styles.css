@@ -1052,6 +1052,122 @@ button.small {
   gap: 0.5rem;
 }
 
+/* the shelf photo on a card: a small picture with a caption, larger when pressed */
+.photo-row {
+  margin: 0 0 0.5rem;
+}
+
+.photo-thumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.photo-thumb img {
+  width: 4.5rem;
+  height: 3.4rem;
+  object-fit: cover;
+  border-radius: 5px;
+  background: var(--line);
+}
+
+.photo-row .photo-note {
+  margin: 0;
+}
+
+/* the photo at full size, over a dimmed page */
+.photo-view {
+  width: min(42rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--ink);
+  overflow: auto;
+}
+
+.photo-view::backdrop {
+  background: rgb(0 0 0 / 0.7);
+}
+
+.photo-view img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 9rem);
+  object-fit: contain;
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.photo-view p {
+  margin: 0.5rem 0;
+}
+
+.photo-view .actions button {
+  margin: 0;
+}
+
+/* the post form's photo: the picked file and a preview of what will be sent */
+.photo-field label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.photo-field input[type="file"] {
+  padding: 0.35rem;
+}
+
+.photo-field .hint {
+  margin: 0.25rem 0 0;
+  font-weight: normal;
+}
+
+.photo-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.photo-preview img {
+  width: 6rem;
+  height: 4.5rem;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--soft);
+}
+
+.photo-preview .hint {
+  margin: 0;
+}
+
+.photo-preview button {
+  margin: 0;
+}
+
+.report-photo {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 12rem;
+  margin: 0.2rem 0 0.35rem;
+  border-radius: 6px;
+}
+
 /* an admin's inbox of reported comments: one line until opened */
 .reports {
   margin: 0.75rem 0;
@@ -1367,7 +1483,7 @@ button.danger {
 /* in columns a skeleton spans the card's rows like a real card does */
 @media (min-width: 44rem) {
   .feed > .skeleton {
-    grid-row: span 11;
+    grid-row: span 12;
     margin-bottom: 0.75rem;
   }
 }
@@ -1991,7 +2107,7 @@ button.danger {
      card rows is each card's own margin, which subgrid adds to its last row. */
   .deal {
     display: grid;
-    grid-row: span 11;
+    grid-row: span 12;
     grid-template-rows: subgrid;
     row-gap: 0;
     align-self: stretch;
@@ -2003,16 +2119,17 @@ button.danger {
      beside it and leave a gap that a long name's card fills */
   .deal > .deal-head { grid-row: 1; flex-direction: column; justify-content: flex-start; }
   .deal > .prices { grid-row: 2; }
-  .deal > .meta { grid-row: 3; }
+  .deal > .photo-row { grid-row: 3; }
+  .deal > .meta { grid-row: 4; }
   .deal > .stock,
-  .deal > .stock-read { grid-row: 4; }
-  .deal > .stock-by { grid-row: 5; }
-  .deal > .trust { grid-row: 6; }
-  .deal > .history { grid-row: 7; }
-  .deal > .pending { grid-row: 8; }
-  .deal > .correct { grid-row: 9; }
-  .deal > .comments { grid-row: 10; }
-  .deal > .delete { grid-row: 11; }
+  .deal > .stock-read { grid-row: 5; }
+  .deal > .stock-by { grid-row: 6; }
+  .deal > .trust { grid-row: 7; }
+  .deal > .history { grid-row: 8; }
+  .deal > .pending { grid-row: 9; }
+  .deal > .correct { grid-row: 10; }
+  .deal > .comments { grid-row: 11; }
+  .deal > .delete { grid-row: 12; }
 }
 
 @media (min-width: 64rem) {

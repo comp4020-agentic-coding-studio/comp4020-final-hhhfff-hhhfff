@@ -67,6 +67,16 @@ export interface Deal {
   confirmedBy: Author[];
   pending: PendingCorrection[];
   history: AppliedCorrection[];
+  photo: PhotoInfo | null;
+}
+
+// A deal's one shelf photo, if it has one; the picture itself is at
+// /api/deals/:id/photo?v=<at>.
+export interface PhotoInfo {
+  at: string; // when it was added, which also names this version of it
+  width: number;
+  height: number;
+  hidden: "reported" | "kept" | null; // only an admin can load a hidden one
 }
 
 // Comments are one level deep: a reply hangs under a top-level comment
@@ -250,6 +260,27 @@ db.exec(`CREATE INDEX IF NOT EXISTS deals_live ON deals(store_id, item_key)`);
   `);
 }
 
+// Shelf photos: one per deal, kept in the database like everything else.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS deal_photos (
+    deal_id      INTEGER PRIMARY KEY REFERENCES deals(id),
+    data         BLOB NOT NULL,
+    width        INTEGER NOT NULL,
+    height       INTEGER NOT NULL,
+    author_id    TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    hidden       TEXT,
+    report_round INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE IF NOT EXISTS photo_reports (
+    deal_id    INTEGER NOT NULL REFERENCES deals(id),
+    author_id  TEXT NOT NULL,
+    round      INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (deal_id, author_id)
+  );
+`);
+
 // A deleted deal is hidden, not removed: other people's comments,
 // confirmations and corrections on it stay in the database.
 if (!columns("deals").includes("deleted_at")) {
@@ -292,9 +323,11 @@ const selectDeals = `
   SELECT d.*,
          s.stock, s.author_id AS stock_author_id, s.author_name AS stock_author_name,
          s.created_at AS stock_at,
-         (SELECT count(*) FROM comments c WHERE c.deal_id = d.id AND c.deleted_at IS NULL) AS comments
+         (SELECT count(*) FROM comments c WHERE c.deal_id = d.id AND c.deleted_at IS NULL) AS comments,
+         p.created_at AS photo_at, p.width AS photo_width, p.height AS photo_height, p.hidden AS photo_hidden
   FROM deals d
   JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
+  LEFT JOIN deal_photos p ON p.deal_id = d.id
 `;
 
 type Row = Record<string, unknown>;
@@ -370,6 +403,14 @@ function toDeal(r: Row): Deal {
     confirmedBy,
     pending: pendingFor(id),
     history: historyFor(id),
+    photo: r.photo_at
+      ? {
+        at: r.photo_at as string,
+        width: r.photo_width as number,
+        height: r.photo_height as number,
+        hidden: (r.photo_hidden as PhotoInfo["hidden"]) ?? null,
+      }
+      : null,
   };
 }
 
@@ -495,9 +536,102 @@ export function createDeal(d: NewDeal, today: string): { created: Deal } | { exi
   return { created: getDeal(id)! };
 }
 
+// The deal stays (hidden) for the comments and corrections on it; its photo,
+// the bulk of what it holds, goes at once.
 export function deleteDeal(id: number): void {
-  db.prepare(`UPDATE deals SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now(), id);
+  tx(() => {
+    db.prepare(`UPDATE deals SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now(), id);
+    removePhoto(id);
+  });
   feedChanged();
+}
+
+// --- shelf photos
+
+// All photos together may take this much of the 1 GB volume.
+export const PHOTO_BUDGET_BYTES = 300 * 1024 * 1024;
+// A photo outlives its deal's end date by this long, then goes.
+export const PHOTO_KEEP_DAYS = 7;
+
+export const photoBytes = (): number =>
+  Number((db.prepare(`SELECT coalesce(sum(length(data)), 0) AS n FROM deal_photos`).get() as { n: number }).n);
+
+// Adds or replaces a deal's photo; a new photo starts with no reports.
+export function setPhoto(dealId: number, data: Buffer, width: number, height: number, author: Author): void {
+  tx(() => {
+    db.prepare(`DELETE FROM photo_reports WHERE deal_id = ?`).run(dealId);
+    db.prepare(
+      `INSERT OR REPLACE INTO deal_photos (deal_id, data, width, height, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(dealId, data, width, height, author.id, now());
+  });
+}
+
+// the picture of a live deal's photo, or null
+export function photoData(dealId: number): { data: Buffer; hidden: PhotoInfo["hidden"] } | null {
+  const row = db
+    .prepare(
+      `SELECT p.data, p.hidden FROM deal_photos p JOIN deals d ON d.id = p.deal_id
+       WHERE p.deal_id = ? AND d.deleted_at IS NULL`,
+    )
+    .get(dealId) as Row | undefined;
+  return row ? { data: Buffer.from(row.data as Uint8Array), hidden: (row.hidden as PhotoInfo["hidden"]) ?? null } : null;
+}
+
+export function removePhoto(dealId: number): boolean {
+  db.prepare(`DELETE FROM photo_reports WHERE deal_id = ?`).run(dealId);
+  return db.prepare(`DELETE FROM deal_photos WHERE deal_id = ?`).run(dealId).changes > 0;
+}
+
+// Photos of deleted deals, and of deals that ended PHOTO_KEEP_DAYS before
+// `today`, are removed. Returns how many went.
+export function sweepPhotos(today: string): number {
+  const before = new Date(Date.parse(`${today}T00:00:00Z`) - PHOTO_KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+  return tx(() => {
+    const gone = (db
+      .prepare(
+        `SELECT p.deal_id FROM deal_photos p JOIN deals d ON d.id = p.deal_id
+         WHERE d.deleted_at IS NOT NULL OR (d.ends_on IS NOT NULL AND d.ends_on < ?)`,
+      )
+      .all(before) as { deal_id: number }[]).map((r) => r.deal_id);
+    for (const id of gone) removePhoto(id);
+    return gone.length;
+  });
+}
+
+// Reports on a photo work like reports on a comment: one per person, ever;
+// REPORT_THRESHOLD of them in a round hide it and tell every admin.
+export function reportPhoto(dealId: number, who: Author): { added: boolean; hidden: boolean; admins: string[] } {
+  return tx(() => {
+    const p = db.prepare(`SELECT hidden, report_round FROM deal_photos WHERE deal_id = ?`).get(dealId) as Row;
+    const added = db
+      .prepare(`INSERT OR IGNORE INTO photo_reports (deal_id, author_id, round, created_at) VALUES (?, ?, ?, ?)`)
+      .run(dealId, who.id, p.report_round as number, now()).changes > 0;
+    if (!added) return { added, hidden: false, admins: [] };
+    const admins = (db.prepare(`SELECT id FROM users WHERE role = 'admin'`).all() as { id: string }[]).map((a) => a.id);
+    if (p.hidden) return { added, hidden: false, admins };
+    const { n } = db
+      .prepare(`SELECT count(*) AS n FROM photo_reports WHERE deal_id = ? AND round = ?`)
+      .get(dealId, p.report_round as number) as { n: number };
+    if (n < REPORT_THRESHOLD) return { added, hidden: false, admins };
+    db.prepare(`UPDATE deal_photos SET hidden = 'reported' WHERE deal_id = ?`).run(dealId);
+    const deal = db.prepare(`SELECT item FROM deals WHERE id = ?`).get(dealId) as { item: string };
+    const tell = db.prepare(`INSERT INTO notifications (author_id, deal_id, text, created_at) VALUES (?, ?, ?, ?)`);
+    for (const admin of admins) {
+      tell.run(admin, dealId, `${n} people reported the photo on "${deal.item}". ` +
+        `It's hidden until you review it under "Reports to review".`, now());
+    }
+    return { added, hidden: true, admins };
+  });
+}
+
+const PHOTO_UNREVIEWED = `(hidden = 'reported' OR EXISTS (
+  SELECT 1 FROM photo_reports r WHERE r.deal_id = deal_photos.deal_id AND r.round = deal_photos.report_round))`;
+
+export function reviewPhoto(dealId: number, decision: "restore" | "keep"): boolean {
+  const set = decision === "restore" ? "hidden = NULL" : "hidden = 'kept'";
+  return db
+    .prepare(`UPDATE deal_photos SET ${set}, report_round = report_round + 1 WHERE deal_id = ? AND ${PHOTO_UNREVIEWED}`)
+    .run(dealId).changes > 0;
 }
 
 // One person may report a deal's stock once per STOCK_COOLDOWN_MS, so nobody
@@ -837,14 +971,43 @@ export function reviewComment(id: number, decision: "restore" | "keep"): boolean
   return db.prepare(sql).run(id).changes > 0;
 }
 
-export interface ReportedComment {
-  comment: Comment; // as an admin sees it
-  deal: { id: number; item: string; storeId: string };
+type DealRef = { id: number; item: string; storeId: string };
+export type Reported =
+  | { kind: "comment"; comment: Comment; deal: DealRef } // the comment as an admin sees it
+  | { kind: "photo"; photo: PhotoInfo & { reports: number }; deal: DealRef };
+
+// The admin's inbox: comments and photos on live deals with something to
+// review, those already hidden first, then the most reported.
+export function listReports(): Reported[] {
+  const photos = (db
+    .prepare(
+      `SELECT deal_photos.deal_id, deal_photos.created_at, deal_photos.width, deal_photos.height, deal_photos.hidden,
+         d.item, d.store_id,
+         (SELECT count(*) FROM photo_reports r WHERE r.deal_id = deal_photos.deal_id AND r.round = deal_photos.report_round) AS n
+       FROM deal_photos JOIN deals d ON d.id = deal_photos.deal_id
+       WHERE d.deleted_at IS NULL AND ${PHOTO_UNREVIEWED}`,
+    )
+    .all() as Row[]).map((r): Reported => ({
+    kind: "photo",
+    photo: {
+      at: r.created_at as string,
+      width: r.width as number,
+      height: r.height as number,
+      hidden: (r.hidden as PhotoInfo["hidden"]) ?? null,
+      reports: Number(r.n),
+    },
+    deal: { id: r.deal_id as number, item: r.item as string, storeId: r.store_id as string },
+  }));
+  const rank = (x: Reported) =>
+    x.kind === "photo" ? [x.photo.hidden ? 1 : 0, x.photo.reports] : [x.comment.hidden ? 1 : 0, x.comment.reports ?? 0];
+  return [...commentReports(), ...photos].sort((a, b) => {
+    const [ha, na] = rank(a);
+    const [hb, nb] = rank(b);
+    return hb - ha || nb - na;
+  });
 }
 
-// The admin's inbox: live comments on live deals with something to review,
-// those already hidden first, then the most reported.
-export function listReports(): ReportedComment[] {
+function commentReports(): Reported[] {
   const rows = db
     .prepare(
       `SELECT comments.id, comments.deal_id, d.item, d.store_id,
@@ -860,6 +1023,7 @@ export function listReports(): ReportedComment[] {
     const dealId = r.deal_id as number;
     if (!byDeal.has(dealId)) byDeal.set(dealId, listComments(dealId, admin));
     return {
+      kind: "comment",
       comment: byDeal.get(dealId)!.find((c) => c.id === r.id)!,
       deal: { id: dealId, item: r.item as string, storeId: r.store_id as string },
     };
