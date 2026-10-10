@@ -292,6 +292,38 @@ button.small {
   font-weight: 600;
   background: var(--accent);
   color: var(--accent-ink);
+  position: relative;
+  overflow: hidden;
+  transition: translate 0.15s ease-out, box-shadow 0.15s ease-out, filter 0.15s;
+}
+
+/* a slow band of light crosses the post button now and then, to be noticed
+   without nagging; it lifts a little under the pointer */
+.post-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.28) 50%, transparent 70%);
+  translate: -100% 0;
+  animation: sheen 7s ease-in-out 1.5s infinite;
+  pointer-events: none;
+}
+
+.post-toggle:hover {
+  translate: 0 -1px;
+  filter: brightness(1.06);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.post-toggle:active {
+  translate: 0 0;
+  box-shadow: none;
+  filter: brightness(0.96);
+}
+
+@keyframes sheen {
+  0% { translate: -100% 0; }
+  14%, 100% { translate: 100% 0; }
 }
 
 .post-head {
@@ -763,6 +795,35 @@ button.small {
   box-shadow: none;
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.3));
   clip-path: polygon(50% 0%, 61% 13%, 77% 7%, 79% 23%, 95% 25%, 89% 40%, 100% 50%, 89% 60%, 95% 75%, 79% 77%, 77% 93%, 61% 87%, 50% 100%, 39% 87%, 23% 93%, 21% 77%, 5% 75%, 11% 60%, 0% 50%, 11% 40%, 5% 25%, 21% 23%, 23% 7%, 39% 13%);
+}
+
+/* A glossy sticker: a glint crosses it every few seconds, staggered so the
+   cards don't flash in step. Not on the quiet dashed one, nor once sold out. */
+.prices .off {
+  position: relative;
+  overflow: hidden;
+}
+
+.off:not([data-depth="small"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.6) 50%, transparent 65%);
+  translate: -120% 0;
+  animation: glint 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.feed > li:nth-child(3n + 2) .off::after { animation-delay: 1.6s; }
+.feed > li:nth-child(3n) .off::after { animation-delay: 3.2s; }
+
+.sold-out .off::after {
+  display: none;
+}
+
+@keyframes glint {
+  0% { translate: -120% 0; }
+  16%, 100% { translate: 120% 0; }
 }
 
 .meta {
