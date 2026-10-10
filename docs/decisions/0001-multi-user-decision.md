@@ -120,10 +120,21 @@ Measured and manually judged:
   but that was before `b089362` added the new-post button: now the button shows
   as soon as the event arrives, with no request, and the list is fetched only
   when the reader taps it.
+- On 2026-10-10 I measured the deployed app (Fly, `syd`, running `37b31f6`).
+  A throwaway account posted one clearly labelled special, changed its price
+  ten times with the poster's own correction, then deleted it. Timed from just
+  before each change was sent, on the same clock: a guest's SSE stream heard
+  the event after a median of 12 ms (11–16), a guest fetching the post as the
+  page does had it after 26 ms (22–47), and a real guest page in headless
+  Chrome showed the new price after 32 ms (29–46). The deleted card left that
+  page after 16 ms. These were all measured from one computer's network. A
+  first attempt failed when this network could not connect to Fly within 10
+  seconds; a phone on a mobile network will be slower and less even, and I
+  have not measured one.
 - A person must still judge whether a glow or new-post button is noticeable
   without being distracting, whether deferring an update while someone types is
-  the right trade-off, and whether "within moments" holds on the deployed app
-  over real mobile networks. This has not been tested with strangers.
+  the right trade-off, and whether "within moments" holds over real mobile
+  networks. This has not been tested with strangers.
 
 ## Would change if
 
