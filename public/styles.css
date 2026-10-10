@@ -40,8 +40,11 @@
   box-sizing: border-box;
 }
 
+/* clip, not hidden, so the sticky search row still sticks: a stamp landing
+   near a phone's edge mustn't flash a sideways scrollbar */
 body {
   margin: 0;
+  overflow-x: clip;
 }
 
 .wrap {
@@ -826,6 +829,15 @@ button.small {
   16%, 100% { translate: 120% 0; }
 }
 
+/* a card's first showing: its sticker is pressed on, one card after another */
+.deal.arrive .off {
+  animation: stamp-on 0.4s cubic-bezier(0.2, 1.5, 0.4, 1) calc(var(--i, 0) * 60ms + 0.1s) both;
+}
+
+@keyframes stamp-on {
+  from { opacity: 0; scale: 1.8; rotate: -30deg; }
+}
+
 .meta {
   margin: 0 0 0.5rem;
   font-size: 0.9rem;
@@ -894,6 +906,30 @@ button.small {
 
 .meter button[aria-pressed="true"] {
   font-weight: 700;
+}
+
+/* a new report: the lit cell slides over from the old level (--from) */
+.meter button.slid {
+  position: relative;
+  z-index: 0;
+  background: transparent;
+}
+
+.meter button.slid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--level);
+  animation: level-in 0.3s ease-out;
+}
+
+.meter.static i.slid {
+  animation: level-in 0.3s ease-out;
+}
+
+@keyframes level-in {
+  from { translate: var(--from) 0; }
 }
 
 .stock .gone {
@@ -969,6 +1005,15 @@ button.small {
   rotate: -12deg;
   opacity: 0.85;
   pointer-events: none;
+}
+
+/* just marked sold out: the stamp comes down onto the card */
+.deal.stamped::after {
+  animation: stamp-down 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+@keyframes stamp-down {
+  from { opacity: 0; scale: 1.8; }
 }
 
 .login-to-comment {
@@ -1060,6 +1105,22 @@ button.small {
 
 .pending li button {
   margin: 0.2rem 0 0;
+}
+
+/* corrections and comments open and close smoothly where the browser can
+   animate to an auto height; elsewhere they snap as before */
+.deal details {
+  interpolate-size: allow-keywords;
+}
+
+.deal details::details-content {
+  height: 0;
+  overflow: clip;
+  transition: height 0.25s ease-out, content-visibility 0.25s allow-discrete;
+}
+
+.deal details[open]::details-content {
+  height: auto;
 }
 
 .correct summary {
@@ -1593,6 +1654,27 @@ button.danger {
 @keyframes updated {
   0% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 3px color-mix(in srgb, var(--good) 70%, transparent); }
   100% { box-shadow: inset 4px 0 0 var(--fresh), 0 0 0 14px transparent; }
+}
+
+/* a new post drops into its place, then glows like a changed card */
+.deal.landed {
+  animation: land 0.45s ease-out, updated 1.6s ease-out 0.3s;
+}
+
+@keyframes land {
+  from { opacity: 0; translate: 0 -0.75rem; }
+}
+
+/* with a mouse, the card under the pointer lifts a little */
+@media (hover: hover) and (pointer: fine) {
+  .deal {
+    transition: translate 0.2s ease-out, box-shadow 0.2s ease-out;
+  }
+
+  .deal:hover {
+    translate: 0 -2px;
+    box-shadow: inset 4px 0 0 var(--fresh), 0 6px 18px rgb(0 0 0 / 0.08);
+  }
 }
 
 /* new posts wait in a pill that rides along at the top while scrolling */

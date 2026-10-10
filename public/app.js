@@ -296,6 +296,7 @@ function renderFeed() {
   $("#feed").replaceChildren(
     ...deals.map((d) => cardFor(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
+  [...$("#feed").children].forEach((li, i) => li.style.setProperty("--i", i)); // staggers the stickers' stamp
   renderPager();
   const store = byId.get($("#store-filter").value);
   const q = query();
@@ -474,7 +475,36 @@ function cardFor(d, store, commentsOpen, correctOpen) {
   if (built.size > 1000) built.clear(); // a long session doesn't keep every card it ever saw
   const li = dealCard(d, store, commentsOpen, correctOpen);
   built.set(d.id, { key, li });
+  // what changed since the card last on screen, played once: a first showing
+  // stamps its sticker, going sold out stamps the card, a new level slides in
+  const was = hit?.li;
+  if (!seen.has(d.id)) play(li, "arrive", 1500);
+  else if (was && d.stock === "gone" && !was.classList.contains("sold-out")) play(li, "stamped", 900);
+  else if (was && was.dataset.stock !== d.stock) slideLevel(li, was.dataset.stock, d.stock);
+  seen.add(d.id);
   return li;
+}
+
+const seen = new Set(); // deals whose card has been shown
+
+// A class that plays an animation, taken off afterwards: a cached card put
+// back in the feed would otherwise play it again.
+function play(el, cls, ms) {
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), ms);
+}
+
+// the lit cell of the stock bar slides over from the level reported before
+function slideLevel(li, from, to) {
+  const [a, b] = [STOCK_LEVEL[from], STOCK_LEVEL[to]];
+  if (!a || !b) return; // to or from sold out, which isn't on the bar
+  const cell = $(`.meter button[data-stock="${to}"]`, li);
+  cell.style.setProperty("--from", `${(a - b) * 100}%`);
+  cell.style.transition = "none"; // so its colour doesn't fade in again when the slide ends
+  play(cell, "slid", 500);
+  const dot = $(".meter.static i.filled", li);
+  dot.style.setProperty("--from", `calc(${a - b} * (100% + 3px))`);
+  play(dot, "slid", 500);
 }
 
 // How fresh a card is: its edge goes green within the hour (with a pulsing
@@ -1129,6 +1159,7 @@ async function publish() {
     replaceOrAdd(deal);
     closeSimilar(`Posted “${deal.item}”.`);
     jumpTo(deal.id);
+    glow(deal.id, "landed");
   } catch (err) {
     // the server's one-post-per-item-per-store rule: show the post that's already there
     if (err.status === 409 && err.data.existing) {
@@ -1627,17 +1658,18 @@ newPosts.addEventListener("click", async () => {
   clearWaiting();
   $("#feed-layout").scrollIntoView({ block: "start", behavior: "smooth" });
   await loadFeed();
-  for (const d of deals) if (!before.has(d.id)) glow(d.id);
+  for (const d of deals) if (!before.has(d.id)) glow(d.id, "landed");
 });
 
-// a card someone else just changed glows once, so the change is seen
-function glow(id) {
+// a card someone else just changed glows once, so the change is seen; a new
+// one ("landed") drops into place first
+function glow(id, cls = "updated") {
   const card = document.getElementById(`deal-${id}`);
   if (!card) return;
-  card.classList.remove("updated");
+  card.classList.remove(cls);
   void card.offsetWidth; // restart the animation if it's still running
-  card.classList.add("updated");
-  card.addEventListener("animationend", () => card.classList.remove("updated"), { once: true });
+  card.classList.add(cls);
+  setTimeout(() => card.classList.remove(cls), 2000);
 }
 
 // Every open page hears every event at once. A page that has to ask the server
