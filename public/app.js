@@ -1155,6 +1155,7 @@ $("#similar-cancel").addEventListener("click", () => {
 async function publish() {
   try {
     const deal = await api("/api/deals", draft);
+    notWaiting(deal.id);
     clearPost();
     replaceOrAdd(deal);
     closeSimilar(`Posted “${deal.item}”.`);
@@ -1644,8 +1645,19 @@ const newPosts = $("#new-posts");
 function newPostWaiting(id) {
   if (page !== 1 || deals.some((d) => d.id === id)) return; // elsewhere, or my own post, already shown
   waiting.add(id);
+  showWaiting();
+}
+
+// My own post's "new" event can arrive before the server's answer to my post
+// does (they come over different connections), when it still looks like
+// someone else's; once the answer is here it isn't news to me.
+function notWaiting(id) {
+  if (waiting.delete(id)) showWaiting();
+}
+
+function showWaiting() {
   newPosts.textContent = waiting.size === 1 ? "↑ 1 new special" : `↑ ${waiting.size} new specials`;
-  newPosts.hidden = false;
+  newPosts.hidden = !waiting.size;
 }
 
 function clearWaiting() {
