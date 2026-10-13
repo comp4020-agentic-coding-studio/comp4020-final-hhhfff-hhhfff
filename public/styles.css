@@ -619,6 +619,45 @@ button.small {
   gap: 0 1rem;
 }
 
+/* the item's name opens the post on its own page, to share */
+.item-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.item-link:hover,
+.item-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.single-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.single-head[hidden] {
+  display: none;
+}
+
+.single-head .back {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.single-head .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.single-head .hint:empty {
+  display: none;
+}
+
 /* Freshness: a strip down the card's left edge, green within the hour,
    amber within six, then faint; a pulsing dot for the last ten minutes. */
 .deal {

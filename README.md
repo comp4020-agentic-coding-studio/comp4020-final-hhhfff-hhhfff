@@ -56,7 +56,8 @@ stripped, gone with their post, hidden after ten reports); comment replies, like
 the ten-report hide with an admin's review and inbox, including reports at once;
 guests being read-only; logins across browsers; no
 password or session token leaking; typo-tolerant search; every live post
-reachable across pages; and live updates reaching an open page.
+reachable across pages; live updates reaching an open page; and each post's
+own address, whose link preview shows the item, price, store and stock.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
@@ -71,7 +72,9 @@ it with strangers.
   scattered and rarely live.
 - **PetrolSpy**, where drivers report fuel prices for strangers, is the
   model for crowd-reported prices here.
-- **My friends** pass on cheap food in chat, found by luck.
+- **My friends** pass on cheap food in chat, found by luck. So each post
+  has its own link, and pasted into a chat it previews the item, price and
+  how much is left; opened, it stays live like the feed.
 
 The shop list and the street map come from OpenStreetMap, taken once, not fetched at runtime. Each post records where the poster
 saw it, so readers can weigh it.

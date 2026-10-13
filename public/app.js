@@ -263,6 +263,7 @@ function syncAddress(push) {
 // `motion` animates the swap when the reader turned a page ("next", "prev")
 // or changed store ("swap"); live updates and typing don't animate.
 async function loadFeed(motion) {
+  if (single) return loadSingle();
   const feed = $("#feed");
   const status = $("#feed-status");
   const mine = ++feedRequest;
@@ -300,6 +301,57 @@ async function loadFeed(motion) {
     if (mine === feedRequest) feed.setAttribute("aria-busy", "false");
   }
 }
+
+// --- one post on its own page, /deals/123: the card as in the feed, kept
+// live the same way, with no search, map, pages or post form around it
+const single = Number(location.pathname.match(/^\/deals\/(\d+)$/)?.[1]) || null;
+
+async function loadSingle() {
+  const feed = $("#feed");
+  const mine = ++feedRequest;
+  feed.setAttribute("aria-busy", "true");
+  try {
+    const d = await api(`/api/deals/${single}`);
+    if (mine !== feedRequest) return;
+    const first = !deals.length;
+    deals = [d];
+    total = 1;
+    renderFeed();
+    // someone sent this link to be read: its comments start open
+    if (first) $("#feed details.comments").open = true;
+    const store = storeById().get(d.storeId);
+    document.title = `${d.item} ${money(d.nowCents)} · ${store?.name ?? ""} · discountShow`;
+  } catch (err) {
+    if (mine !== feedRequest) return;
+    deals = [];
+    total = 0;
+    feed.replaceChildren();
+    $("#feed-status").textContent = err.status === 404
+      ? "This special has been deleted, or the link is wrong."
+      : `Couldn't load this special: ${err.message}.`;
+    $("#share").hidden = true;
+  } finally {
+    if (mine === feedRequest) feed.setAttribute("aria-busy", "false");
+  }
+}
+
+function showSingleLayout() {
+  document.body.classList.add("single");
+  $("#single-head").hidden = false;
+  for (const sel of [".filters", "#store-map", "#post-toggle", "#chains", "#pager", "#filters-top"]) $(sel).hidden = true;
+}
+
+$("#share").addEventListener("click", async () => {
+  const url = location.href;
+  try {
+    if (navigator.share) return void (await navigator.share({ title: document.title, url }));
+    await navigator.clipboard.writeText(url);
+    $("#share-status").textContent = "Link copied.";
+  } catch (err) {
+    if (err?.name === "AbortError") return; // the share sheet was closed
+    $("#share-status").textContent = `Copy this link: ${url}`;
+  }
+});
 
 // Sold-out posts go after the rest, as the server sends them; otherwise newest first.
 const shelfOrder = (list) => [...list].sort((a, b) => (a.stock === "gone") - (b.stock === "gone"));
@@ -414,6 +466,7 @@ addEventListener("popstate", () => {
 // With posts, the chains' links are a sidebar; with none, they fill the middle
 // under the empty-feed (or empty-search) note. Hidden until the feed first loads.
 function showChains() {
+  if (single) return;
   const empty = !deals.length;
   $("#chains").hidden = false;
   $("#chains").classList.toggle("empty", empty);
@@ -548,7 +601,9 @@ setInterval(() => document.querySelectorAll("#feed > li").forEach(paintFreshness
 
 // the item and store lines, which change with the search and with "Near me"
 function paintNames(li, d, store) {
-  $(".item", li).replaceChildren(...highlighted(d.item));
+  const link = $(".item-link", li);
+  link.href = `/deals/${d.id}`;
+  link.replaceChildren(...highlighted(d.item));
   $(".store", li).replaceChildren(...highlighted(store ? `${store.name}, ${store.where}` : d.storeId),
     store ? ` · ${km(origin, store).toFixed(1)} km` : "");
 }
@@ -2112,7 +2167,7 @@ let waiting = new Set();
 const newPosts = $("#new-posts");
 
 function newPostWaiting(id) {
-  if (page !== 1 || deals.some((d) => d.id === id)) return; // elsewhere, or my own post, already shown
+  if (single || page !== 1 || deals.some((d) => d.id === id)) return; // elsewhere, or my own post, already shown
   waiting.add(id);
   showWaiting();
 }
@@ -2172,6 +2227,7 @@ function removeCard(id) {
   if (!card) return; // on another page
   card.remove();
   deals = deals.filter((x) => x.id !== id);
+  if (single) return void loadSingle(); // says it's gone
   reloadSoon(); // the next post moves up to fill the page, and the count drops
 }
 
@@ -2232,13 +2288,14 @@ document.addEventListener("visibilitychange", () => {
   loadNotices();
 });
 
+if (single) showSingleLayout();
 $("#search").value = new URLSearchParams(location.search).get("q") ?? "";
 page = pageFromAddress();
 me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");
 renderStoreOptions();
-if (!$("#store-map").hidden) drawMap();
+if (!single && !$("#store-map").hidden) drawMap();
 await loadFeed();
 loadNotices();
 connectLive();

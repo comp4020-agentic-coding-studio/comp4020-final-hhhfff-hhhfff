@@ -402,6 +402,53 @@ async function sendFile(req: IncomingMessage, res: ServerResponse, root: string,
   res.end(accepts ? gzipOf(path, data) : data);
 }
 
+const escapeHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+const dollars = (c: number): string => `$${(c / 100).toFixed(2)}`;
+const PAGE_META = /<!-- page meta[\s\S]*?<!-- \/page meta -->/;
+
+// The page itself, with this address's own title and link preview, so a post
+// or store shared in a chat shows what it is. The page script does the rest.
+async function sendPage(req: IncomingMessage, res: ServerResponse, meta: { title: string; description: string; image?: string }): Promise<void> {
+  const html = await readFile(join("public", "index.html"), "utf8");
+  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "");
+  const scheme = req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+  const [title, description] = [escapeHtml(meta.title), escapeHtml(meta.description)];
+  const tags = [
+    `<title>${title}</title>`,
+    `<meta name="description" content="${description}" />`,
+    `<meta property="og:site_name" content="discountShow" />`,
+    `<meta property="og:title" content="${title}" />`,
+    `<meta property="og:description" content="${description}" />`,
+    ...(meta.image && /^[\w.:-]+$/.test(host)
+      ? [`<meta property="og:image" content="${escapeHtml(`${scheme}://${host}${meta.image}`)}" />`, `<meta name="twitter:card" content="summary_large_image" />`]
+      : []),
+  ];
+  const page = html.replace(PAGE_META, tags.join("\n    "));
+  const accepts = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store",
+    vary: "accept-encoding",
+    ...(accepts ? { "content-encoding": "gzip" } : {}),
+  });
+  res.end(accepts ? gzipSync(page) : page);
+}
+
+const STOCK_WORDS: Record<Stock, string> = { plenty: "plenty left", some: "some left", few: "only a few left", gone: "sold out" };
+
+function dealMeta(id: number) {
+  const d = getDeal(id);
+  const store = d && storeById.get(d.storeId);
+  if (!d || !store) return { title: "Special not found · discountShow", description: "This special has been deleted or never existed." };
+  const pct = Math.round((1 - d.nowCents / d.wasCents) * 100);
+  return {
+    title: `${d.item} ${dollars(d.nowCents)} (was ${dollars(d.wasCents)}) · ${store.name}`,
+    description: `${pct}% off at ${store.name}, ${store.where}. ${STOCK_WORDS[d.stock][0].toUpperCase()}${STOCK_WORDS[d.stock].slice(1)}, reported by students near ANU.`,
+    image: d.photo && !d.photo.hidden ? `/api/deals/${d.id}/photo?v=${encodeURIComponent(d.photo.at)}` : undefined,
+  };
+}
+
 // README.md is read per request, so a local edit shows without a restart.
 // Relative image links (docs/x.png) resolve under /readme/, which serves docs/.
 async function sendReadme(res: ServerResponse): Promise<void> {
@@ -761,6 +808,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
   if (path === "/readme/") return sendReadme(res);
   if (path.startsWith("/readme/docs/")) return sendFile(req, res, "docs", path.slice("/readme/docs/".length));
+  if ((m = path.match(/^\/deals\/(\d{1,9})$/))) return sendPage(req, res, dealMeta(Number(m[1])));
   return sendFile(req, res, "public", path === "/" ? "index.html" : path.slice(1));
 }
 

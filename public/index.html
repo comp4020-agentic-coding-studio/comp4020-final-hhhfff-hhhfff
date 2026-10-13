@@ -3,8 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- page meta: the server puts one post's (or store's) own title and preview here -->
     <title>discountShow</title>
     <meta name="description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <meta property="og:site_name" content="discountShow" />
+    <meta property="og:title" content="discountShow" />
+    <meta property="og:description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <!-- /page meta -->
     <!-- before the styles, so a chosen theme is in place before anything paints -->
     <script src="/theme.js"></script>
     <link rel="stylesheet" href="/styles.css" />
@@ -170,6 +175,13 @@
 
       <!-- with posts, the chains' links sit beside the feed (below it on a phone);
            with none, they fill the middle under a note that nothing is shared yet -->
+      <!-- one post on its own page (/deals/123): a link someone shared lands here -->
+      <nav id="single-head" class="single-head" aria-label="Where you are" hidden>
+        <a href="/" class="back">← All specials</a>
+        <button type="button" id="share" class="quiet small">Share this special</button>
+        <p class="hint" id="share-status" aria-live="polite"></p>
+      </nav>
+
       <div id="feed-layout" class="feed-layout">
         <section aria-labelledby="feed-heading">
           <h2 id="feed-heading" class="visually-hidden" tabindex="-1">Specials</h2>
@@ -261,7 +273,7 @@
     <template id="deal-template">
       <li class="card deal">
         <div class="deal-head">
-          <h3 class="item"></h3>
+          <h3 class="item"><a class="item-link"></a></h3>
           <p class="store"></p>
           <p class="ends-soon" hidden></p>
         </div>
