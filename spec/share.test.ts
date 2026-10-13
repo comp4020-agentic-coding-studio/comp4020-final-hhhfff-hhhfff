@@ -62,6 +62,38 @@ describe.skipIf(!writes)("a post's own page", () => {
   });
 });
 
+describe("stores' own pages", () => {
+  it("a store's page is titled with its name and says how many specials are live there", async () => {
+    const { status, html } = await page("/stores/coles-civic");
+    expect(status).toBe(200);
+    expect(html).toContain('src="/app.js"');
+    expect(html).toContain("<title>Coles, Bunda St, Civic · discountShow</title>");
+    expect(meta(html, "og:description")).toMatch(/^(No specials|1 special|\d+ specials) live at Coles, Bunda St, Civic/);
+  });
+
+  it.skipIf(!writes)("counts a new special in the store's preview", async () => {
+    const before = meta((await page("/stores/iga-ainslie")).html, "og:description")!;
+    const count = (s: string) => (s.startsWith("No") ? 0 : Number.parseInt(s, 10));
+    const poster = await person("spec store page");
+    await call("/api/deals", special(poster, { storeId: "iga-ainslie" }));
+    const after = meta((await page("/stores/iga-ainslie")).html, "og:description")!;
+    expect(count(after)).toBe(count(before) + 1);
+  });
+
+  it("lists every store at /stores, and an unknown store's page says so", async () => {
+    expect((await page("/stores")).html).toContain("<title>Stores near ANU · discountShow</title>");
+    const { status, html } = await page("/stores/no-such-shop");
+    expect(status).toBe(200);
+    expect(meta(html, "og:title")).toBe("Store not found · discountShow");
+  });
+
+  it("/about leads to the README", async () => {
+    const res = await fetch(new URL("/about", baseUrl), { redirect: "manual" });
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/readme/");
+  });
+});
+
 it("the home page keeps the site's own title and preview", async () => {
   const { html } = await page("/");
   expect(html).toContain("<title>discountShow</title>");

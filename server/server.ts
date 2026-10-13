@@ -449,6 +449,16 @@ function dealMeta(id: number) {
   };
 }
 
+function storeMeta(id: string) {
+  const store = storeById.get(id);
+  if (!store) return { title: "Store not found · discountShow", description: "There is no such store on discountShow." };
+  const live = storesWithCounts().find((s) => s.id === id)!.live;
+  return {
+    title: `${store.name}, ${store.where} · discountShow`,
+    description: `${live === 0 ? "No specials" : live === 1 ? "1 special" : `${live} specials`} live at ${store.name}, ${store.where}, reported by students near ANU.`,
+  };
+}
+
 // README.md is read per request, so a local edit shows without a restart.
 // Relative image links (docs/x.png) resolve under /readme/, which serves docs/.
 async function sendReadme(res: ServerResponse): Promise<void> {
@@ -809,6 +819,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (path === "/readme/") return sendReadme(res);
   if (path.startsWith("/readme/docs/")) return sendFile(req, res, "docs", path.slice("/readme/docs/".length));
   if ((m = path.match(/^\/deals\/(\d{1,9})$/))) return sendPage(req, res, dealMeta(Number(m[1])));
+  if ((m = path.match(/^\/stores\/([a-z0-9-]{1,60})$/))) return sendPage(req, res, storeMeta(m[1]));
+  if (path === "/stores") {
+    return sendPage(req, res, { title: "Stores near ANU · discountShow", description: "Every supermarket and grocer near ANU, and how many specials each has live." });
+  }
+  if (path === "/about") {
+    res.writeHead(301, { location: "/readme/" });
+    return void res.end();
+  }
   return sendFile(req, res, "public", path === "/" ? "index.html" : path.slice(1));
 }
 

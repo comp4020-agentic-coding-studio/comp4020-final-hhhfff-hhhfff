@@ -57,7 +57,8 @@ the ten-report hide with an admin's review and inbox, including reports at once;
 guests being read-only; logins across browsers; no
 password or session token leaking; typo-tolerant search; every live post
 reachable across pages; live updates reaching an open page; and each post's
-own address, whose link preview shows the item, price, store and stock.
+and each store's own address, whose link preview shows the item, price,
+store and stock, or the store and how many specials it has live.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;

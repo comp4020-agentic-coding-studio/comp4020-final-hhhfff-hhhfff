@@ -248,9 +248,13 @@ function feedPath() {
   return `/api/deals?${params}`;
 }
 
-// the search and page into the address; `push` makes a step Back can undo
+// the store, search and page into the address; `push` makes a step Back can undo
 function syncAddress(push) {
   const url = new URL(location.href);
+  if (!single) {
+    const store = $("#store-filter").value;
+    url.pathname = store ? `/stores/${store}` : directory ? "/stores" : "/";
+  }
   if (query()) url.searchParams.set("q", query());
   else url.searchParams.delete("q");
   if (page > 1) url.searchParams.set("page", page);
@@ -335,23 +339,100 @@ async function loadSingle() {
   }
 }
 
+// --- stores: /stores lists them all; /stores/<id> is one store's specials
+// with where it is. Picking a store anywhere (the list, the map) goes there.
+let directory = location.pathname === "/stores";
+const storeFromAddress = () => location.pathname.match(/^\/stores\/([a-z0-9-]+)$/)?.[1] ?? "";
+
+function showStorePage() {
+  const store = storeById().get($("#store-filter").value);
+  const head = $("#store-head");
+  head.hidden = !store;
+  $("#store-dir").hidden = !directory || !!store;
+  // the store list is the page at /stores: the specials feed is a click away
+  for (const sel of ["#feed-layout", "#post-toggle", ".filters"]) $(sel).hidden = directory && !store;
+  // one store's page says where it is, so its specials come first, not the map;
+  // this doesn't change what's remembered for the home page
+  if (store && !$("#store-map").hidden) showMap(false, { remember: false });
+  else if (!store && !single && $("#store-map").hidden && !mapWasClosed()) showMap(true, { remember: false });
+  document.querySelectorAll(".site-nav a").forEach((a) => a.removeAttribute("aria-current"));
+  if (store || directory) $("#nav-stores").setAttribute("aria-current", "page");
+  else if (!single) $("#nav-specials").setAttribute("aria-current", "page");
+  if (directory && !store) {
+    document.title = "Stores near ANU · discountShow";
+    drawStoreDir();
+  }
+  if (!store) {
+    if (!directory && !single) document.title = "discountShow";
+    return;
+  }
+  $("#store-title").textContent = store.name;
+  $("#store-where").textContent = `${store.where} · ${km(origin, store).toFixed(1)} km from ${origin === ANU ? "ANU" : "you"}`;
+  $("#store-live").textContent = store.live === 0 ? "Nothing live here right now."
+    : store.live === 1 ? "1 special live now." : `${store.live} specials live now.`;
+  $("#store-directions").href = `https://www.openstreetmap.org/directions?to=${store.lat},${store.lon}#map=17/${store.lat}/${store.lon}`;
+  document.title = `${store.name}, ${store.where} · discountShow`;
+}
+
+function drawStoreDir() {
+  const list = [...stores].sort((a, b) => b.live - a.live || km(origin, a) - km(origin, b));
+  $("#store-dir-list").replaceChildren(
+    ...list.map((s) => {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = `/stores/${s.id}`;
+      a.dataset.store = s.id;
+      const name = document.createElement("span");
+      name.className = "store-dir-name";
+      name.textContent = s.name;
+      const where = document.createElement("small");
+      where.textContent = `${s.where} · ${km(origin, s).toFixed(1)} km`;
+      const count = document.createElement("b");
+      count.className = "store-dir-count";
+      count.dataset.live = s.live ? "yes" : "no";
+      count.textContent = s.live ? `${s.live} live` : "none";
+      a.append(name, where, count);
+      li.append(a);
+      return li;
+    }),
+  );
+}
+
+// a store link inside the app: go there without reloading the page
+$("#store-dir-list").addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-store]");
+  if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+  e.preventDefault();
+  pickStore(a.dataset.store);
+});
+
+function pickStore(id) {
+  const filter = $("#store-filter");
+  filter.value = id;
+  filter.dispatchEvent(new Event("change"));
+  if (id) $("#store-head").scrollIntoView?.({ block: "start" });
+}
+
+async function shareLink(status) {
+  const url = location.href;
+  try {
+    if (navigator.share) return void (await navigator.share({ title: document.title, url }));
+    await navigator.clipboard.writeText(url);
+    status.textContent = "Link copied.";
+  } catch (err) {
+    if (err?.name === "AbortError") return; // the share sheet was closed
+    status.textContent = `Copy this link: ${url}`;
+  }
+}
+$("#store-share").addEventListener("click", () => shareLink($("#store-share-status")));
+
 function showSingleLayout() {
   document.body.classList.add("single");
   $("#single-head").hidden = false;
   for (const sel of [".filters", "#store-map", "#post-toggle", "#chains", "#pager", "#filters-top"]) $(sel).hidden = true;
 }
 
-$("#share").addEventListener("click", async () => {
-  const url = location.href;
-  try {
-    if (navigator.share) return void (await navigator.share({ title: document.title, url }));
-    await navigator.clipboard.writeText(url);
-    $("#share-status").textContent = "Link copied.";
-  } catch (err) {
-    if (err?.name === "AbortError") return; // the share sheet was closed
-    $("#share-status").textContent = `Copy this link: ${url}`;
-  }
-});
+$("#share").addEventListener("click", () => shareLink($("#share-status")));
 
 // Sold-out posts go after the rest, as the server sends them; otherwise newest first.
 const shelfOrder = (list) => [...list].sort((a, b) => (a.stock === "gone") - (b.stock === "gone"));
@@ -460,6 +541,10 @@ addEventListener("popstate", () => {
   const params = new URLSearchParams(location.search);
   $("#search").value = params.get("q") ?? "";
   page = pageFromAddress();
+  $("#store-filter").value = storeFromAddress();
+  directory = location.pathname === "/stores";
+  showStorePage();
+  if (!$("#store-map").hidden) drawMap();
   loadFeed("swap");
 });
 
@@ -2277,7 +2362,9 @@ new ResizeObserver(() => document.documentElement.style.setProperty("--filters-h
 $("#store-filter").addEventListener("change", () => {
   if (!$("#store-map").hidden) drawMap();
   page = 1;
-  syncAddress(false);
+  if (!$("#store-filter").value && location.pathname.startsWith("/stores/")) directory = false;
+  syncAddress(true); // a store is a page of its own, so Back returns from it
+  showStorePage();
   loadFeed("swap");
 });
 // coming back to the tab picks up what others posted meanwhile
@@ -2295,6 +2382,12 @@ me = await api("/api/me").catch(() => null);
 showMe();
 stores = await api("/api/stores");
 renderStoreOptions();
+$("#store-filter").value = storeFromAddress();
+if (storeFromAddress() && !$("#store-filter").value) {
+  $("#feed-status").textContent = "There's no such store. Here are all the specials.";
+  history.replaceState(null, "", "/");
+}
+showStorePage();
 if (!single && !$("#store-map").hidden) drawMap();
 await loadFeed();
 loadNotices();

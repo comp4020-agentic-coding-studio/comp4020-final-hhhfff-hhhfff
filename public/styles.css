@@ -79,6 +79,136 @@ body {
   color: inherit;
 }
 
+/* Specials · Stores · About: the page you're on is underlined */
+.site-nav {
+  display: flex;
+  gap: 0.15rem;
+  margin-right: auto;
+  font-size: 0.95rem;
+}
+
+.site-nav a {
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  color: var(--accent-ink);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.site-nav a:hover {
+  opacity: 1;
+  background: rgb(255 255 255 / 0.12);
+}
+
+.site-nav a[aria-current="page"] {
+  opacity: 1;
+  box-shadow: inset 0 -2px 0 var(--accent-ink);
+  border-radius: 0;
+}
+
+.masthead .site-nav :focus-visible {
+  outline-color: #fff;
+}
+
+/* a store's own page: its name, where it is, what's live, and how to get there */
+.store-head {
+  margin-top: 1rem;
+}
+
+.store-head .back {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.store-head h2 {
+  margin: 0.35rem 0 0;
+  font-size: 1.4rem;
+}
+
+.store-head .hint {
+  margin: 0.1rem 0 0;
+}
+
+.store-live {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.store-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.6rem 0 0;
+}
+
+.store-links a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#store-share-status:empty {
+  display: none;
+}
+
+/* every store, a row each, the ones with specials first */
+.store-dir {
+  margin-top: 1rem;
+}
+
+.store-dir h2 {
+  margin: 0;
+}
+
+.store-dir-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.store-dir-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.store-dir-list a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.75rem;
+  padding: 0.6rem 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.store-dir-list a:hover .store-dir-name {
+  text-decoration: underline;
+}
+
+.store-dir-name {
+  font-weight: 600;
+}
+
+.store-dir-list small {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.store-dir-count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.store-dir-count[data-live="yes"] {
+  background: var(--tint);
+  color: var(--ink);
+}
+
 .top-links .who {
   font-weight: 600;
 }
@@ -124,7 +254,9 @@ button.theme-toggle {
   line-height: 1.2;
 }
 
-.masthead .title a {
+.masthead .title a,
+.brand-link {
+  color: inherit;
   text-decoration: none;
 }
 
@@ -638,10 +770,6 @@ button.small {
   justify-content: space-between;
   gap: 0.5rem 1rem;
   margin: 1rem 0 0.75rem;
-}
-
-.single-head[hidden] {
-  display: none;
 }
 
 .single-head .back {
@@ -2063,6 +2191,19 @@ button.danger {
     display: none;
   }
 
+  /* the name and the account share the top row, the site's pages the second,
+     so adding pages didn't push the first special down */
+  .masthead {
+    padding: 0.5rem 0 0.15rem;
+  }
+
+  .site-nav {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0 0 0 -0.4rem;
+    font-size: 0.9rem;
+  }
+
   .deal {
     padding: 0.85rem;
   }
@@ -2086,6 +2227,10 @@ button.danger {
   .top-links {
     gap: 0.45rem;
     font-size: 0.9rem;
+  }
+
+  .site-nav a {
+    padding: 0.25rem 0.4rem;
   }
 
   button.on-accent {
