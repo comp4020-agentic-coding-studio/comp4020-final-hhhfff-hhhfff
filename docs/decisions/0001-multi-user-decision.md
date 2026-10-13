@@ -2,7 +2,9 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-07
-- **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`)
+- **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`); 2026-10-14
+  (comment replies, likes and shelf photos use the same `deal` signal, now
+  tested; references brought up to date)
 - **Decided by:** u8113538
 
 ## Context
@@ -31,7 +33,7 @@ show changes to visible posts and new posts on page one within moments
 
 Those goals pull toward fast automatic updates. The same README also describes
 a small, neighbourhood-scale service and caps live watching at 300 pages
-(`README.md:71`). That pulls against a heavier two-way protocol or sending full
+(`README.md:93`). That pulls against a heavier two-way protocol or sending full
 post data to every listener. The interface should make changes noticeable
 without taking control of the feed away from someone who is reading or typing.
 
@@ -46,7 +48,15 @@ so the reader chooses when to reload and does not get pushed down the feed.
 A deleted post's card disappears at once; only the refill, the next post moving
 up to keep the page full, waits a random delay of up to two seconds, coalescing
 multiple events. Corrections intended for a poster use the same connection but
-are sent only to that signed-in user's listeners.
+are sent only to that signed-in user's listeners, and so are notices to admins
+that their report inbox changed.
+
+Features added after this decision ride on the same four event types rather
+than adding new ones. A comment, reply, like or deleted comment, and a shelf
+photo added, removed or restored, each send `deal` with the post's ID, so the
+page refetches that one card. A comment or photo that reaches ten reports and
+is hidden also sends `deal`, so it disappears for everyone at once; a report
+that does not hide anything sends nothing to the public stream.
 
 The stream is available to guests, carries no post or credential payload, sends
 a heartbeat every 25 seconds, and asks browsers to reconnect after three
@@ -100,15 +110,17 @@ Automated checks:
 
 - `spec/live.test.ts` opens the real `/api/events` stream and verifies that a
   guest receives `new`, `deal`, and `deleted` events for posting, stock,
-  comments, confirmations, and deletion.
+  comments, confirmations, and deletion, and `deal` events for a comment
+  reply, a like, a deleted comment, and a shelf photo added or removed.
 - The same test verifies that broadcast frames contain only `type` and `id`,
   never the poster's name or session token, and that a correction notice reaches
   the poster but not a bystander.
 - `spec/new-posts.test.ts` runs the real client in jsdom and delivers the live
   event before the POST response. It verifies that a user's own post is not
   counted in the new-post button and another user's post is counted.
-- The complete `pnpm check` run on 2026-10-10 passed TypeScript checking, all 16
-  test files, and all 70 tests.
+- The complete `pnpm check` run on 2026-10-14 passed TypeScript checking, all 18
+  test files, and all 83 tests. With the broadcast after a like removed from
+  the server, the new comment-and-photo test fails, so it does check the signal.
 
 Measured and manually judged:
 
@@ -149,15 +161,15 @@ confusing would justify an automatic, position-preserving insertion instead.
 
 ## References
 
-- `README.md:15-18`, `README.md:32-33`, `README.md:41-53`, `README.md:71`
+- `README.md:15-18`, `README.md:32-33`, `README.md:49-59`, `README.md:93`
 - `PROCESS.md:105-116` (load measurements and request spreading)
 - `server/events.ts:3-46` (event protocol, listener cap, retry and heartbeat)
-- `server/server.ts:396-400` (SSE endpoint)
+- `server/server.ts:442-446` (SSE endpoint)
 - `public/app.js`, `connectLive` (connection and reconnect catch-up)
 - `public/app.js`, `onLive`, `newPostWaiting`, `notWaiting`, `reloadSoon`,
   `refreshDeal` and `busy` (event handling, new-post queue, coalesced reload,
   card refresh and busy-card protection)
-- `spec/live.test.ts:54-115`
+- `spec/live.test.ts:54-145`
 - `spec/new-posts.test.ts:69-95`
 - `d206304` — introduce ID-only Server-Sent Events and live-update tests
 - `6ccc571` — limit refetches, distinguish new posts, and spread reloads

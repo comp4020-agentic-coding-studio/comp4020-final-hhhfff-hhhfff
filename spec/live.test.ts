@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { baseUrl, call, person, special, writes } from "./api.ts";
+import { JPEG, baseUrl, call, person, special, writes } from "./api.ts";
 
 // Live updates: an open page hears about a change without asking. The stream
 // carries only ids (and a "notice" for the poster it concerns); a guest may
@@ -76,6 +76,36 @@ describe.skipIf(!writes)("live updates", () => {
 
       await call(`/api/deals/${deal.id}/delete`, { author: poster.as });
       await guest.until((e) => e.type === "deleted" && e.id === deal.id);
+    } finally {
+      guest.close();
+    }
+  });
+
+  it("a guest hears about replies, likes, deleted comments and a photo added or removed", async () => {
+    const poster = await person("spec poster");
+    const other = await person("spec other");
+    const { data: deal } = await call("/api/deals", special(poster));
+    const { data: comment } = await call(`/api/deals/${deal.id}/comments`, { body: "still there?", author: poster.as });
+    const guest = await watch();
+    try {
+      const photo = (path: string, body?: BodyInit) =>
+        fetch(new URL(path, baseUrl), {
+          method: "POST",
+          headers: { cookie: poster.as.cookie, ...(body ? { "content-type": "image/jpeg" } : {}) },
+          body,
+        });
+      const changes: [string, () => Promise<number>][] = [
+        ["reply", async () => (await call(`/api/deals/${deal.id}/comments`, { body: "yes", replyTo: comment.id, author: other.as })).status],
+        ["like", async () => (await call(`/api/comments/${comment.id}/like`, { liked: true, author: other.as })).status],
+        ["delete comment", async () => (await call(`/api/comments/${comment.id}/delete`, { author: poster.as })).status],
+        ["add photo", async () => (await photo(`/api/deals/${deal.id}/photo`, new Uint8Array(JPEG))).status],
+        ["remove photo", async () => (await photo(`/api/deals/${deal.id}/photo/delete`)).status],
+      ];
+      for (const [what, change] of changes) {
+        const before = guest.events.length;
+        expect(await change(), what).toBeLessThan(300);
+        await guest.until((e) => e.type === "deal" && e.id === deal.id && guest.events.indexOf(e) >= before);
+      }
     } finally {
       guest.close();
     }
