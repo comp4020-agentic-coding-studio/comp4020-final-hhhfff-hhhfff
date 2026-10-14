@@ -350,8 +350,10 @@ function showStorePage() {
   const head = $("#store-head");
   head.hidden = !store;
   $("#store-dir").hidden = !directory || !!store;
-  // the store list is the page at /stores: the specials feed is a click away
-  for (const sel of ["#feed-layout", "#post-toggle", ".filters"]) $(sel).hidden = directory && !store;
+  // the store list is the page at /stores: the specials feed is a click away;
+  // a post's own page keeps only the post (showSingleLayout hid the rest)
+  $("#feed-layout").hidden = directory && !store;
+  if (!single) for (const sel of ["#post-toggle", ".filters"]) $(sel).hidden = directory && !store;
   // one store's page says where it is, so its specials come first, not the map;
   // this doesn't change what's remembered for the home page
   if (store && !$("#store-map").hidden) showMap(false, { remember: false });
