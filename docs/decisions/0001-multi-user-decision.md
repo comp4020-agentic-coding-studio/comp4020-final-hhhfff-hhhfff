@@ -4,7 +4,8 @@
 - **Date:** 2026-10-07
 - **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`); 2026-10-14
   (comment replies, likes and shelf photos use the same `deal` signal, now
-  tested; references brought up to date)
+  tested; references brought up to date); 2026-10-14 (presence adds `hello`
+  and `here`, see ADR 0002)
 - **Decided by:** u8113538
 
 ## Context
@@ -28,12 +29,12 @@ rather than introduce another service.
 
 README rule 5 says that **"Gone" arrives before the walk**: an open page should
 show changes to visible posts and new posts on page one within moments
-(`README.md:32-33`). This supports the larger standard that a student can
+(`README.md:32-36`). This supports the larger standard that a student can
 "trust a single post enough to walk to the shop for it" (`README.md:15-18`).
 
 Those goals pull toward fast automatic updates. The same README also describes
 a small, neighbourhood-scale service and caps live watching at 300 pages
-(`README.md:93`). That pulls against a heavier two-way protocol or sending full
+(`README.md:104`). That pulls against a heavier two-way protocol or sending full
 post data to every listener. The interface should make changes noticeable
 without taking control of the feed away from someone who is reading or typing.
 
@@ -56,7 +57,9 @@ than adding new ones. A comment, reply, like or deleted comment, and a shelf
 photo added, removed or restored, each send `deal` with the post's ID, so the
 page refetches that one card. A comment or photo that reaches ten reports and
 is hidden also sends `deal`, so it disappears for everyone at once; a report
-that does not hide anything sends nothing to the public stream.
+that does not hide anything sends nothing to the public stream. Showing who
+else is looking (ADR 0002) added two more that still carry no data: `hello`,
+sent only down its own stream with that stream's random id, and a bare `here`.
 
 The stream is available to guests, carries no post or credential payload, sends
 a heartbeat every 25 seconds, and asks browsers to reconnect after three
@@ -161,15 +164,16 @@ confusing would justify an automatic, position-preserving insertion instead.
 
 ## References
 
-- `README.md:15-18`, `README.md:32-33`, `README.md:49-59`, `README.md:93`
+- `README.md:15-18`, `README.md:32-36`, `README.md:52-67`, `README.md:104`
 - `PROCESS.md:105-116` (load measurements and request spreading)
-- `server/events.ts:3-46` (event protocol, listener cap, retry and heartbeat)
-- `server/server.ts:442-446` (SSE endpoint)
+- `server/events.ts:3-61`, `server/events.ts:119-122` (event protocol, listener
+  cap, retry and heartbeat)
+- `server/server.ts:498-502` (SSE endpoint)
 - `public/app.js`, `connectLive` (connection and reconnect catch-up)
 - `public/app.js`, `onLive`, `newPostWaiting`, `notWaiting`, `reloadSoon`,
   `refreshDeal` and `busy` (event handling, new-post queue, coalesced reload,
   card refresh and busy-card protection)
-- `spec/live.test.ts:54-145`
+- `spec/live.test.ts:9-100`, with the stream reader in `spec/stream.ts`
 - `spec/new-posts.test.ts:69-95`
 - `d206304` — introduce ID-only Server-Sent Events and live-update tests
 - `6ccc571` — limit refetches, distinguish new posts, and spread reloads
