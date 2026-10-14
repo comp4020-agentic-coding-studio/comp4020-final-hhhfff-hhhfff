@@ -56,17 +56,24 @@ README, stop and say so rather than picking one.
 - Specials come first on the page; the post form stays folded. The store
   map starts open (the user's decision; closing it is remembered on the
   device), so it stays short on a phone and the first special still shows
-  on the first screen at 360px and 400px. A guest sees
+  on the first screen at 390×844, and at 360px and 400px. A guest sees
   the feed and a prompt to log in, and the write buttons ask them to.
 - A guest's card is read-only: how much is left, confirmations, corrections
   and comments, with no buttons that would only be refused. Sold-out posts
   sort after the rest. Before anything loads, the page says it's loading.
-- Check UI changes by looking at 360px, 400px and desktop, logged in and as
-  a guest. Plain headless Chrome below ~500px lays out wider than asked, and
+- The course marks at exactly two viewports in the latest Chrome:
+  **390×844** (phone, DevTools' iPhone preset) and **1920×1080** (desktop),
+  and everything must work cleanly at both (`topics/assessment`, "Marking
+  environment"). Real-time is marked with one session at each, side by side.
+- Check UI changes at 390×844 and 1920×1080 first, then 360px and 400px as
+  extra phone checks, logged in and as a guest. Set the height too, not just
+  the width: "on the first screen" depends on it. Plain headless Chrome
+  below ~500px lays out wider than asked, and
   `--dump-dom`/`--virtual-time-budget` never finish because of the live
   stream; drive Chrome over its DevTools protocol instead, and close each tab
   (each holds a live connection, and plain HTTP allows six per host).
-- Works at phone width (~400px) and desktop, with no horizontal scroll.
+- Works at both marking viewports, and at 360px and 400px, with no
+  horizontal scroll.
 - Prices are integer cents in storage, dollars in display. "Today" is
   Canberra's today.
 - No form field may be named after a built-in form property (`item` was
@@ -98,11 +105,20 @@ README, stop and say so rather than picking one.
   `designer` subagent (`.claude/agents/designer.md`) from the template in
   `docs/plans/README.md`. A bug fix, a wording fix or a pure refactor doesn't
   need one.
-- Build only from a plan marked **Approved** by the user. Don't approve a
-  plan yourself, and don't redesign while building: if the plan turns out
-  wrong, stop, say what is wrong, and change the plan first.
-- The plan's acceptance lines become the tests in `spec/`. When it ships,
-  mark it **Built** with the PR link.
+- Build only from a plan the user approved, at the exact version in their
+  `Approve plan NNN:` commit; the building PR names that commit. Before
+  building and before merging, `git diff <that commit> -- <plan>` must show
+  no change to the plan (see `docs/plans/README.md`). Don't approve a plan
+  or edit an approved one yourself, and don't redesign while building: if
+  the plan turns out wrong, stop, say what is wrong, and wait for a new
+  approval.
+- The plan's **automated** acceptance lines become tests in `spec/`; its
+  **observed** lines are checked by looking, at the viewports they name,
+  and what was seen is recorded. Marking a plan **Built** needs the evidence
+  listed in `docs/plans/README.md`: the PR and approval commit, the test
+  results, the deploy and a live check, the observations, and the user's own
+  judgement of whether it did what the plan was for. Leave that last part
+  for the user to write; a merged PR is not evidence on its own.
 
 ## Working style
 
