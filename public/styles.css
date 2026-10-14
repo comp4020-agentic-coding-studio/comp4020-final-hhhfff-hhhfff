@@ -266,12 +266,15 @@ body {
   display: none;
 }
 
-/* buttons that sit on the red header */
-button.on-accent {
+/* buttons that sit on the red header (Log in is a link that looks like one) */
+button.on-accent,
+a.on-accent {
   padding: 0.35rem 0.8rem;
+  border-radius: 6px;
   background: var(--accent-ink);
   color: var(--accent);
   font-weight: 600;
+  text-decoration: none;
 }
 
 button.on-accent.quiet {
@@ -442,31 +445,115 @@ button.small {
   display: none;
 }
 
-.account {
-  margin: 0.75rem 0;
+/* /login: one card under the header, why on a shelf ticket, then the form;
+   .wrap.login so the wide-screen .wrap width further down doesn't win */
+.wrap.login {
+  max-width: 28rem;
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
 }
 
-.account .auth {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
+.login-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.25rem;
 }
 
-.account .auth label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  flex: 1 1 12rem;
-  min-width: 0;
+/* the price ticket's shape, hole and all, holding a sentence instead */
+.login-ticket {
+  justify-self: start;
+  position: relative;
+  margin: 0;
+  padding: 0.45rem 0.75rem 0.45rem 1.5rem;
+  background: var(--ticket);
+  color: var(--ticket-ink);
+  border-radius: 4px 12px 12px 4px;
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.1), 0 3px 8px rgb(0 0 0 / 0.1);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.login-ticket::before {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  top: 50%;
+  width: 0.42rem;
+  height: 0.42rem;
+  margin-top: -0.21rem;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.login-form,
+.login-signed-in {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-form label {
+  display: grid;
+  gap: 0.25rem;
   font-size: 0.9rem;
   font-weight: 600;
 }
 
-.account .auth .actions,
-.account .auth .hint,
-.account .auth .error {
-  flex-basis: 100%;
+.login-form input {
+  padding: 0.6rem 0.7rem;
+}
+
+.login-form .hint,
+.login-form .error,
+.login-signed-in p {
   margin: 0;
+}
+
+/* the main action, in the header's red, as wide as the card */
+.login-submit {
+  display: block;
+  width: 100%;
+  padding: 0.7rem 1rem;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.login-submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+/* the other way in, as a quiet line of text under it */
+.login-switch {
+  justify-self: center;
+  padding: 0.25rem 0.5rem;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.login-back {
+  margin: 1rem 0 0;
+  text-align: center;
+}
+
+.login-back a {
+  color: var(--muted);
+}
+
+@media (min-width: 44rem) {
+  .wrap.login {
+    padding-top: 3rem;
+  }
 }
 
 .post-toggle {
@@ -1253,8 +1340,16 @@ button.small {
   from { opacity: 0; scale: 1.8; }
 }
 
+/* a link to /login, looking like the small quiet buttons around it */
 .login-to-comment {
-  margin: 0 0 0.5rem;
+  display: inline-block;
+  margin: 0.3rem 0 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-decoration: none;
 }
 
 .comments summary {
@@ -2317,7 +2412,8 @@ button.danger {
 /* the narrowest phones (360px): keep the header, the store row and the four
    stock buttons each on one line */
 @media (max-width: 24rem) {
-  .masthead h1 {
+  .masthead h1,
+  .masthead .title {
     font-size: 1.2rem;
   }
 
@@ -2334,7 +2430,8 @@ button.danger {
     padding: 0.25rem 0.4rem;
   }
 
-  button.on-accent {
+  button.on-accent,
+  a.on-accent {
     padding: 0.3rem 0.55rem;
   }
 
@@ -2369,11 +2466,6 @@ button.danger {
   .filters,
   .post,
   .similar {
-    max-width: 44rem;
-    margin-inline: auto;
-  }
-
-  .account {
     max-width: 44rem;
     margin-inline: auto;
   }

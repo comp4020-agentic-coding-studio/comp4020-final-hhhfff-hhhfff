@@ -852,6 +852,8 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     res.writeHead(301, { location: "/readme/" });
     return void res.end();
   }
+  // the same page whatever ?next= and ?why= say; login.js reads and checks them
+  if (path === "/login") return sendFile(req, res, "public", "login.html");
   return sendFile(req, res, "public", path === "/" ? "index.html" : path.slice(1));
 }
 

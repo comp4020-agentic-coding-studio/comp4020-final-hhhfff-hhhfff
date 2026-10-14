@@ -262,6 +262,7 @@ function syncAddress(push) {
   if (url.href === location.href) return;
   if (push) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
+  showLoginLinks();
 }
 
 // `motion` animates the swap when the reader turned a page ("next", "prev")
@@ -550,6 +551,7 @@ addEventListener("popstate", () => {
   $("#store-filter").value = storeFromAddress();
   directory = location.pathname === "/stores";
   showStorePage();
+  showLoginLinks();
   if (!$("#store-map").hidden) drawMap();
   loadFeed("swap");
 });
@@ -794,7 +796,8 @@ function dealCard(d, store, commentsOpen, correctOpen) {
   $(".comment-form", li).hidden = !me;
   const loginToComment = $(".login-to-comment", li);
   loginToComment.hidden = !!me;
-  loginToComment.addEventListener("click", () => requireLogin("comment"));
+  // back to this post on its own page, where its comments start open
+  loginToComment.href = loginHref("comment", `/deals/${d.id}`);
   if (commentsOpen) details.open = true;
   return li;
 }
@@ -1398,33 +1401,25 @@ function alertIn(container, message) {
 
 // --- account
 
-const authForm = $("#auth");
-const account = $("#account");
-const WHY = $("#auth-why").textContent;
+// Logging in is a page of its own, /login, which sends the reader back to
+// `next` (only this site's pages; login.js checks). `why` ("post",
+// "comment") picks what it says the account is for.
+function loginHref(why, next = location.pathname + location.search) {
+  return `/login?${new URLSearchParams(why ? { why, next } : { next })}`;
+}
+
+// the header's link follows the address, which the feed rewrites as it goes
+function showLoginLinks() {
+  $("#show-login").href = loginHref();
+}
 
 function showMe() {
   $("#who").textContent = me ? `${me.name}${isAdmin() ? " (admin)" : ""}` : "";
   $("#show-login").hidden = !!me;
   $("#logout").hidden = !me;
-  if (me) hideAuth();
+  showLoginLinks();
   // a guest's post button says what it takes, rather than opening a form they can't send
   $("#post-toggle").textContent = me ? "+ Post a special" : "Log in to post a special";
-}
-
-// `why` says what the visitor was trying to do when they were asked to log in
-function showAuth(why = "") {
-  account.hidden = false;
-  $("#show-login").setAttribute("aria-expanded", "true");
-  $("#auth-why").textContent = why ? `${why} Reading stays free.` : WHY;
-  $("#auth-error").textContent = "";
-  account.scrollIntoView({ block: "nearest" });
-  authForm.elements.username.focus();
-}
-
-function hideAuth({ refocus = false } = {}) {
-  account.hidden = true;
-  $("#show-login").setAttribute("aria-expanded", "false");
-  if (refocus) $("#show-login").focus();
 }
 
 // The session cookie is shared by every tab, so another tab can log in or out
@@ -1443,36 +1438,19 @@ async function syncMe() {
   loadNotices();
 }
 
-// Writes need an account: say so, and open the login form.
-function requireLogin(what = "do that") {
+// Writes need an account. A guest never sees these buttons, so this is a page
+// that was logged out in another tab: say so, with a link, rather than leave
+// a comment or correction half typed for the login page.
+function requireLogin() {
   if (me) return true;
-  showAuth(`Log in or create an account to ${what}.`);
+  const link = document.createElement("a");
+  link.href = loginHref();
+  link.textContent = "Log in";
+  $("#feed-status").replaceChildren("You're logged out. ", link, " to do that.");
   return false;
 }
 
-async function enter(path) {
-  const error = $("#auth-error");
-  error.textContent = "";
-  try {
-    me = await api(path, { username: authForm.elements.username.value, password: authForm.elements.password.value });
-    authForm.reset();
-    showMe();
-    connectLive(); // so this connection gets my own notices
-    await loadFeed();
-    loadNotices();
-  } catch (err) {
-    error.textContent = err.message;
-  }
-}
-
-authForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  enter("/api/login");
-});
-$("#register-btn").addEventListener("click", () => enter("/api/register"));
-$("#auth-cancel").addEventListener("click", () => hideAuth({ refocus: true }));
-account.addEventListener("keydown", (e) => e.key === "Escape" && hideAuth({ refocus: true }));
-$("#show-login").addEventListener("click", () => (account.hidden ? showAuth() : hideAuth()));
+$("#show-login").addEventListener("click", showLoginLinks);
 $("#logout").addEventListener("click", async () => {
   await api("/api/logout", {}).catch(() => {});
   me = null;
@@ -1559,8 +1537,14 @@ post.addEventListener("submit", async (e) => {
   e.preventDefault();
   const error = $("#post-error");
   error.textContent = "";
-  if (!requireLogin("post a special")) {
-    error.textContent = "Log in first (top of the page).";
+  if (!me) {
+    // logged out since the form opened (another tab did it): keep the draft,
+    // and log in beside it rather than leave it
+    const link = document.createElement("a");
+    link.href = loginHref("post");
+    link.target = "_blank";
+    link.textContent = "Log in in a new tab";
+    error.replaceChildren("You're logged out. ", link, ", then post again: this form keeps what you wrote.");
     return;
   }
   try {
@@ -1606,7 +1590,8 @@ function closePost({ refocus = false } = {}) {
   if (refocus) toggle.focus();
 }
 
-toggle.addEventListener("click", () => requireLogin("post a special") && openPost());
+// a guest's "Log in to post a special" goes to the login page, and comes back here
+toggle.addEventListener("click", () => (me ? openPost() : location.assign(loginHref("post"))));
 $("#post-close").addEventListener("click", () => closePost({ refocus: true }));
 for (const panel of [post, similar]) {
   panel.addEventListener("keydown", (e) => e.key === "Escape" && closePost({ refocus: true }));

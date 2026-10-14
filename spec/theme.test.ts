@@ -9,8 +9,8 @@ const baseUrl = inject("baseUrl");
 
 const page = async (path: string) => new JSDOM(await (await fetch(new URL(path, baseUrl))).text()).window.document;
 
-it("both pages load theme.js in the head, before the styles", async () => {
-  for (const path of ["/", "/readme/"]) {
+it("every page loads theme.js in the head, before the styles", async () => {
+  for (const path of ["/", "/readme/", "/login"]) {
     const head = (await page(path)).head;
     const script = head.querySelector('script[src="/theme.js"]');
     const styles = head.querySelector('link[rel="stylesheet"][href="/styles.css"]');

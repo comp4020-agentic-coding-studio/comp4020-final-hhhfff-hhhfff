@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in · discountShow</title>
+    <meta name="description" content="Log in to discountShow to post, confirm, correct and comment on specials near ANU." />
+    <!-- before the styles, so a chosen theme is in place before anything paints -->
+    <script src="/theme.js"></script>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/login.js"></script>
+  </head>
+  <body class="login-page">
+    <header class="masthead">
+      <div class="wrap masthead-row">
+        <p class="title"><a href="/">discountShow</a></p>
+        <nav class="site-nav" aria-label="Site">
+          <a href="/">Specials</a>
+          <a href="/stores">Stores</a>
+          <a href="/readme/">About</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- busy until the server says whether this visitor is already logged in -->
+    <main class="wrap login" aria-busy="true">
+      <section class="card login-card" aria-labelledby="login-title">
+        <!-- why log in, on a shelf ticket like a special's price -->
+        <p id="login-why" class="login-ticket">Reading is free. An account lets you post, confirm, correct, report stock and comment, as the same you in any browser.</p>
+        <h1 id="login-title">Log in</h1>
+
+        <!-- post, so a password never lands in the address if the script hasn't loaded -->
+        <form id="login-form" class="login-form" method="post" novalidate>
+          <label>Username
+            <input name="username" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" required autofocus />
+          </label>
+          <label>Password
+            <input name="password" type="password" maxlength="128" autocomplete="current-password" required />
+          </label>
+          <p class="hint" id="login-rules" hidden>Username: 3–24 letters, digits, - or _. Password: at least 8 characters.</p>
+          <p class="error" role="alert" id="login-error"></p>
+          <button type="submit" id="login-submit" class="login-submit">Log in</button>
+          <button type="button" id="login-switch" class="login-switch">New here? Create an account</button>
+        </form>
+
+        <div id="login-signed-in" class="login-signed-in" hidden>
+          <p>Logged in as <b id="login-name"></b>.</p>
+          <a id="login-continue" class="login-submit" href="/">Continue</a>
+          <button type="button" id="login-logout" class="login-switch">Log out</button>
+        </div>
+      </section>
+      <p class="login-back"><a id="login-back" href="/">← Back</a></p>
+    </main>
+  </body>
+</html>
