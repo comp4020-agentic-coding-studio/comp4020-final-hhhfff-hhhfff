@@ -120,20 +120,29 @@ for an unwanted update. `CLAUDE.md` now requires assertions about the test's
 own data
 ([`efd6d41`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/efd6d41)).
 
-I have now asked for design before implementation
+I then asked for design before implementation
 ([`940ec65`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/940ec65)).
-The designer proposes options tied to the README; I decide before building.
-Review strengthened this: approval names a specific plan version, and
-completion requires tests, observations and my judgement
+A `designer` subagent proposed options tied to the README, and I decided
+before building. Review strengthened this: approval named a specific plan
+version, and completion required tests, observations and my judgement
 ([`7719ccc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/7719ccc)).
-A write-guard hook now restricts the designer to the plans directory;
-its wiring is tested
+A write-guard hook restricted the designer to the plans directory, and its
+wiring was tested
 ([`0d7351b`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/0d7351b)).
 On 14 October 2026, a real designer session was refused permission to write
-outside that directory while a write inside it succeeded. The observation
-and enforcement limits are recorded in [the plan workflow](docs/plans/README.md#what-stops-the-designer-writing-elsewhere).
-The earlier draft plans have been removed; the workflow still needs a
-complete feature cycle.
+outside that directory while a write inside it succeeded.
+
+I removed the designer the same day, before any plan had been built
+([`3ae14b5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/3ae14b5)).
+In practice it added steps to every change: the main agent handed the task
+over, the designer read the code, rules and ADRs and produced a complete
+plan, and the main agent then had to read and condense the result. Going
+through that for each change made the thinking and waiting time noticeably
+longer. The two trial plans had already been deleted unbuilt
+([`ee101ce`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/ee101ce)),
+and a third, for a separate login page, was stopped before it was finished.
+One agent now designs and builds again, under the same `CLAUDE.md` rules,
+specs and browser checks.
 
 ## Towards crit 10: checking the idea with other people
 

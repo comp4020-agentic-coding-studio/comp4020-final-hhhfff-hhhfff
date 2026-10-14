@@ -48,22 +48,6 @@ with that argument; ask the owner before changing it.
   400px, as a guest and signed in. Keep the full README available at `/readme/`.
   Follow [Development notes](docs/development.md) for browser checks.
 
-## Design before building
-
-- Size the change first ([plan sizes](docs/plans/README.md#size-first)).
-  Bug fixes, wording, local styling and refactors that preserve behaviour
-  need no plan. Other changes to what readers see or can do need a brief
-  plan; identity, privacy, multi-user behaviour, the API or stored data
-  need a full one.
-- Only the `designer` subagent writes plans, from the owner's request in
-  the owner's words. Don't write a plan yourself or have another agent
-  stand in for the designer.
-- Build only from the approved version. Do not approve it yourself or
-  change its design while building; if it proves wrong, stop and return to
-  the owner. Follow [the plan workflow](docs/plans/README.md) for approval,
-  revisions and Built evidence; a merged PR alone does not establish that a
-  feature is good.
-
 ## Check and learn
 
 - `pnpm check` must pass before a commit; `pnpm check:evidence` must pass
