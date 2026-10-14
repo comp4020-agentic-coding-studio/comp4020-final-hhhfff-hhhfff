@@ -29,6 +29,10 @@ live updates or UI behaviour.
 - Never expose passwords, password hashes or session tokens in responses.
   Validate client input in `server/server.ts`, use parameterised SQL,
   and render user text with `textContent`, never `innerHTML`.
+- Logging in is its own page, `/login`. Its `?next=` returns only to this
+  site's own pages (`safeNext` in `public/login.js`), anything else to `/`,
+  so a link can't send someone elsewhere after they type a password;
+  `?why=` only picks a fixed sentence (`spec/login.test.ts`).
 - A poster's own vote and repeated votes do not count towards the
   three-person correction quorum. One person means one account.
   Stock reports are limited to one per account per post per minute.
@@ -44,7 +48,8 @@ live updates or UI behaviour.
 - The feed precedes the folded posting form. The map opens by default,
   remembers closing on the device, and stays short enough for the first
   special to remain visible on the first phone screen.
-- Guests' cards are read-only; the page explains how to log in.
+- Guests' cards are read-only; the page explains how to log in, and its
+  links to `/login` bring the reader back to where they were.
   Sold-out posts sort after the rest. Show a loading state before data
   arrives.
 - Use the marking viewports 390×844 and 1920×1080 in Chrome, setting both

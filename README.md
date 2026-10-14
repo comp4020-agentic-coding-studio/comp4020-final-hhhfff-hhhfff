@@ -59,7 +59,8 @@ rules; poster-only delete; admins only from `ADMIN_USERS`; the price check;
 the stock-report limit; shelf photos (poster only, JPEG only, metadata
 stripped, gone with their post, hidden after ten reports); comment replies, likes, deleting with replies, and
 the ten-report hide with an admin's review and inbox, including reports at once;
-guests being read-only; logins across browsers; no
+guests being read-only; logins across browsers; the login page
+returning only to this site's own pages; no
 password or session token leaking; typo-tolerant search; every live post
 reachable across pages; live updates reaching an open page; the live
 badge; who-is-looking counts (one per person however many tabs, gone when

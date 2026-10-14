@@ -32,7 +32,8 @@
         <nav class="top-links" aria-label="Account">
           <button type="button" id="theme-toggle" class="on-accent quiet theme-toggle" aria-label="Colours: follow the system. Switch to light">◐</button>
           <span id="who" class="who"></span>
-          <button type="button" id="show-login" class="on-accent" aria-controls="account" aria-expanded="false">Log in</button>
+          <!-- its own page, /login, which brings the reader back here after -->
+          <a id="show-login" class="on-accent" href="/login">Log in</a>
           <button type="button" id="logout" class="on-accent quiet" hidden>Log out</button>
         </nav>
       </div>
@@ -46,25 +47,6 @@
         <summary id="reports-summary">Reports to review</summary>
         <ol id="reports-list" class="reports-list"></ol>
       </details>
-
-      <!-- reading needs no account, so this stays folded until someone wants to write -->
-      <section id="account" class="card account" aria-labelledby="account-heading" hidden>
-        <div class="post-head">
-          <h2 id="account-heading">Log in or create an account</h2>
-          <button type="button" id="auth-cancel" class="quiet small">Cancel</button>
-        </div>
-        <p class="hint" id="auth-why">Browsing is free. An account lets you post, confirm, correct, report stock and comment, and it is the same you in any browser.</p>
-        <form id="auth" class="auth" novalidate>
-          <label>Username <input name="username" maxlength="24" autocomplete="username" required /></label>
-          <label>Password <input name="password" type="password" maxlength="128" autocomplete="current-password" required /></label>
-          <p class="hint">Username: 3–24 letters, digits, - or _. Password: at least 8 characters.</p>
-          <p class="error" role="alert" id="auth-error"></p>
-          <div class="actions">
-            <button type="submit">Log in</button>
-            <button type="button" id="register-btn" class="quiet">Create account</button>
-          </div>
-        </form>
-      </section>
 
       <!-- a store's own page (/stores/coles-civic): where it is and what's live there -->
       <section id="store-head" class="card store-head" aria-labelledby="store-title" hidden>
@@ -357,7 +339,7 @@
         <details class="comments">
           <summary></summary>
           <ol class="comment-list"></ol>
-          <button type="button" class="quiet small login-to-comment" hidden>Log in to comment</button>
+          <a class="login-to-comment" href="/login" hidden>Log in to comment</a>
           <p class="replying" hidden><span class="replying-to"></span> <button type="button" class="quiet small reply-cancel">Cancel reply</button></p>
           <form class="comment-form">
             <input name="body" maxlength="500" required aria-label="Comment" placeholder="Still there? Worth it? Add a comment" />

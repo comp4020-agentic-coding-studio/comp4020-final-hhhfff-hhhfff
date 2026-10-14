@@ -8,8 +8,8 @@ import { expect, inject, it } from "vitest";
 // collection, is off limits — including in <template> markup.
 const baseUrl = inject("baseUrl");
 
-it("no form field is named after a built-in form property", async () => {
-  const html = await (await fetch(new URL("/", baseUrl))).text();
+it.each(["/", "/login"])("no form field on %s is named after a built-in form property", async (path) => {
+  const html = await (await fetch(new URL(path, baseUrl))).text();
   const { window } = new JSDOM(html);
   const { document } = window;
 
@@ -32,6 +32,6 @@ it("no form field is named after a built-in form property", async () => {
     ),
   );
 
-  expect(names.length, "found no form fields on / to check").toBeGreaterThan(0);
+  expect(names.length, `found no form fields on ${path} to check`).toBeGreaterThan(0);
   expect(names.filter((n) => reserved.has(n))).toEqual([]);
 });

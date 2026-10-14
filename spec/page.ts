@@ -82,3 +82,30 @@ export async function openPage(as: Person | undefined, { path = "/", network }: 
   await until("the live stream", () => FakeEventSource.last !== before && !!FakeEventSource.last.listeners.message);
   return { window, doc };
 }
+
+// The login page, /login, with login.js running against the app. jsdom can't
+// leave a page, so where it would go (location.replace) is recorded in `went`
+// instead. A request the `network` hook throws for fails as if offline.
+export async function openLogin(as: Person | undefined, { path = "/login", network }: Options = {}) {
+  const url = new URL(path, baseUrl);
+  const html = await (await fetch(url)).text();
+  const { window } = new JSDOM(html, { url: url.href, runScripts: "outside-only", pretendToBeVisual: true });
+  const doc = window.document;
+  const went: string[] = [];
+  // a login sets the session cookie; later requests carry it, as a browser's would
+  let cookie = as?.as.cookie;
+
+  window.fetch = async (input: string, init: any = {}) => {
+    const res = await fetch(new URL(input, baseUrl), { ...init, headers: { ...init.headers, ...(cookie ? { cookie } : {}) } });
+    const set = res.headers.get("set-cookie");
+    if (set) cookie = set.split(";")[0].endsWith("=") ? undefined : set.split(";")[0];
+    return network ? network(new URL(input, baseUrl).pathname, init, res) : res;
+  };
+
+  const code = (await (await fetch(new URL("/login.js", baseUrl))).text())
+    .replaceAll("location.replace(", "__went(");
+  Object.assign(window, { __went: (to: string) => void went.push(to) });
+  window.eval(`(async () => {\n${code}\n})()`);
+  await until("the login page", () => doc.querySelector("main")!.getAttribute("aria-busy") === "false");
+  return { window, doc, went };
+}
