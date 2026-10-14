@@ -397,6 +397,12 @@ function, route and file named above exists as described. One gap:
 `.feed > .skeleton` (the loading cards). Both must become `span 13`, or the
 loading cards stop lining up with real ones on desktop.
 
+Written to the first template. Before approval it needs the current one
+(`docs/plans/README.md`): the reader views at the marking viewports,
+390×844 and 1920×1080, and a second session beside the first; acceptance
+split into automated and observed lines (its "named manual checks" become
+observed lines); and empty "Approval" and "Built evidence" sections.
+
 ## Revisions
 
 None: this is a draft and hasn't been approved.

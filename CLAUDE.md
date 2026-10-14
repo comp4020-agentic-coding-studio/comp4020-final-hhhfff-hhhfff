@@ -105,11 +105,20 @@ README, stop and say so rather than picking one.
   `designer` subagent (`.claude/agents/designer.md`) from the template in
   `docs/plans/README.md`. A bug fix, a wording fix or a pure refactor doesn't
   need one.
-- Build only from a plan marked **Approved** by the user. Don't approve a
-  plan yourself, and don't redesign while building: if the plan turns out
-  wrong, stop, say what is wrong, and change the plan first.
-- The plan's acceptance lines become the tests in `spec/`. When it ships,
-  mark it **Built** with the PR link.
+- Build only from a plan the user approved, at the exact version in their
+  `Approve plan NNN:` commit; the building PR names that commit. Before
+  building and before merging, `git diff <that commit> -- <plan>` must show
+  no change to the plan (see `docs/plans/README.md`). Don't approve a plan
+  or edit an approved one yourself, and don't redesign while building: if
+  the plan turns out wrong, stop, say what is wrong, and wait for a new
+  approval.
+- The plan's **automated** acceptance lines become tests in `spec/`; its
+  **observed** lines are checked by looking, at the viewports they name,
+  and what was seen is recorded. Marking a plan **Built** needs the evidence
+  listed in `docs/plans/README.md`: the PR and approval commit, the test
+  results, the deploy and a live check, the observations, and the user's own
+  judgement of whether it did what the plan was for. Leave that last part
+  for the user to write; a merged PR is not evidence on its own.
 
 ## Working style
 
