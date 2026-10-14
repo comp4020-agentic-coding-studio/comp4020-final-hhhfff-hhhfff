@@ -2,8 +2,7 @@
 
 These are binding development rules referenced by `CLAUDE.md`. Read and
 follow the relevant section before changing server data, authentication,
-live updates or UI behaviour. An approved plan must also comply with these
-rules; conflicts return to the owner before implementation.
+live updates or UI behaviour.
 
 ## Runtime and local environment
 
@@ -65,5 +64,3 @@ rules; conflicts return to the owner before implementation.
 ## Further instructions
 
 - Test execution, identities and isolation: [spec/README.md](../spec/README.md).
-- Plan approval, version checks and Built evidence:
-  [docs/plans/README.md](plans/README.md).
