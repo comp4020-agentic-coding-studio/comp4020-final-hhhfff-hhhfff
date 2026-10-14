@@ -91,8 +91,25 @@ README, stop and say so rather than picking one.
 - Don't write Python for edits here: on this machine `python` is only the
   Windows Store stub and silently does nothing. Use the Edit tool or node.
 
+## Design before building
+
+- A new feature, a change to what readers see or can do, or a change to the
+  API or stored data starts as a plan in `docs/plans/`, written by the
+  `designer` subagent (`.claude/agents/designer.md`) from the template in
+  `docs/plans/README.md`. A bug fix, a wording fix or a pure refactor doesn't
+  need one.
+- Build only from a plan marked **Approved** by the user. Don't approve a
+  plan yourself, and don't redesign while building: if the plan turns out
+  wrong, stop, say what is wrong, and change the plan first.
+- The plan's acceptance lines become the tests in `spec/`. When it ships,
+  mark it **Built** with the PR link.
+
 ## Working style
 
+- Changes reach `main` through a pull request, never a direct push: push a
+  branch, open the PR (linking its plan, if any), merge only after CI's
+  `check` passes, and merge with a merge commit (the user's teacher reads
+  the PRs). Merging deploys to Fly; check the live site after.
 - Small commits, one idea each, with a message saying why. The history is
   process evidence: don't squash or rewrite it.
 - Keep `README.md` truthful: when you add or remove a promise (real-time

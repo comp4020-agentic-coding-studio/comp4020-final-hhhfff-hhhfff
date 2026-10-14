@@ -3,4 +3,5 @@ Images for the top-level `README.md` go here. Link them relatively, as
 `/readme/` on the deployed app, which serves this folder at `/readme/docs/`.
 
 Decision records (ADRs) go in `decisions/`, numbered in the order they were
-made.
+made. Plans for features, written and approved before building, go in
+`plans/`; its README says how.
