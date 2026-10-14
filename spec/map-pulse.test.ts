@@ -12,16 +12,17 @@ import { FakeEventSource, openPage, until } from "./page.ts";
 describe.skipIf(!writes)("map pulses", () => {
   it("a new post or a stock report pulses its store's dot; sold out shrinks it; other stores stay still", { timeout: 20_000 }, async () => {
     const store = "iga-oconnor"; // no other spec posts here
+    const atStart = new Map((await call("/api/stores")).data.map((s: any) => [s.id, `${s.lastReportAt}|${s.live}`]));
     const { window, doc } = await openPage(undefined);
     try {
       const dot = () => doc.querySelector<SVGGElement>(`#map-svg .map-store[data-store="${store}"]`)!;
       await until("the map's dots", () => !!dot());
       const pulsing = () =>
         [...doc.querySelectorAll<SVGGElement>("#map-svg .map-store")].filter((g) => g.querySelector(".map-pulse")).map((g) => g.dataset.store);
-      // other spec files post at their own stores meanwhile, and those rightly
-      // ripple too; a store with no news since the page loaded must not
-      const reports = async () => new Map((await call("/api/stores")).data.map((s: any) => [s.id, s.lastReportAt]));
-      const atStart = await reports();
+      // other spec files post, report and delete at their own stores meanwhile,
+      // and those rightly ripple or shrink too; a store with neither a new
+      // report nor a changed count since before the page loaded must not
+      const reports = async () => new Map((await call("/api/stores")).data.map((s: any) => [s.id, `${s.lastReportAt}|${s.live}`]));
       const quiet = async () => {
         const now = await reports();
         return [...now.keys()].filter((id) => now.get(id) === atStart.get(id));
