@@ -1,19 +1,68 @@
 # Plans
 
-A plan says what a feature should be before any code exists: who it is for,
-what each kind of reader sees, what it must not do, and how we will know it
-works. It is written by the `designer` subagent (`.claude/agents/designer.md`)
-or by hand, and **approved by me** before building starts. The building agent
-works from the approved plan and does not redesign as it goes.
+A plan fixes what a change will be before any code exists, so the agent
+that builds it works from a decision instead of designing as it goes. It is
+written for that builder: exact enough to build and check without a design
+decision of its own. The owner reads its **Decision** block and approves,
+changes, defers or drops it.
+
+Plans are written only by the `designer` subagent
+(`.claude/agents/designer.md`), which cannot write code. The main agent
+gives it the owner's request in the owner's words. It doesn't write plans
+itself or have another agent stand in for the designer.
 
 Plans sit beside the other records:
 
 - `README.md` argues what "good" means. A plan must serve one of its rules.
 - A plan (here) is written **before** building: what it will be.
-- An ADR (`docs/decisions/`) is written **when** a lasting choice is made:
-  what was chosen, what was given up, and why.
-- `spec/` holds the tests. A plan's **automated** acceptance lines each
-  become one; its **observed** lines are checked by a person and recorded.
+- An ADR (`docs/decisions/`) records a lasting choice when it is made.
+- `spec/` holds the tests. A plan's **automated** acceptance lines become
+  tests; its **observed** lines are checked by a person and recorded.
+
+## Size first
+
+| Change | Plan | Words, at most |
+|---|---|---|
+| Bug fix, wording, local styling, refactor that changes no behaviour | none | |
+| Any other change to what readers see or can do | brief | 700 |
+| Identity, privacy, multi-user behaviour, the API or stored data | full | 1,500 |
+
+The main agent names the size when it asks the designer, and picks the
+larger one when unsure. Words are counted up to "Approval", and the
+Decision block has at most 150 of them; `spec/plans.test.ts` enforces both.
+A plan that needs more is probably two changes. The first two trial drafts
+ran to 6,500 and 7,600 words, longer than the README they served, and were
+deleted unbuilt on 14 October 2026.
+
+## Approval
+
+1. The designer saves the plan as `Draft` and replies with its Decision
+   block. Nothing is built from a draft.
+2. The owner answers. The main agent records the answer under "Approval":
+   the date, the owner's words, and what they changed, deferred or dropped,
+   or "approved as proposed". A change the owner asks for goes back to the
+   designer, not to the builder.
+3. That record is committed alone, as `Approve plan NNN: ...`. The commit
+   is the approved version, and the building PR names it.
+4. While building, the plan doesn't change. If it proves wrong, building
+   stops and the question goes back to the owner; the designer revises it,
+   it is approved again, and "Revisions" says what changed. Before merging,
+   `git diff <approval commit> -- docs/plans/NNN-name.md` shows only the
+   status line and "Built evidence".
+
+Status is `Draft`, `Approved`, `Built` or `Dropped (why)`. A dropped plan
+stays: what was discarded is evidence of judgement too.
+
+## Built evidence
+
+- the PR, and the approval commit it built from;
+- `pnpm check` passing, and the test for each automated line, named;
+- each observed line: where it was looked at (viewport, guest or signed in,
+  deployed or local), when, and what was seen;
+- the deploy, and a look at the live site;
+- the owner's verdict, in their words: did it do what the plan was for?
+
+A merged PR alone is not evidence that the change does what the plan said.
 
 ## What stops the designer writing elsewhere
 
@@ -22,145 +71,76 @@ PowerShell) and no Edit tool, and a PreToolUse hook in its frontmatter runs
 `.claude/hooks/designer-write-guard.mjs` before every write: anything outside
 `docs/plans/` is refused, and so is any call the hook can't read, or the hook
 failing to start (`onFailure: block`). `spec/designer-guard.test.ts` checks
-the hook and that wiring.
+the hook and that wiring. On 14 October 2026 a real designer session was
+asked to write `docs/guard-check.md` and was refused ("designer-write-guard:
+refused to write …\docs\guard-check.md"), while its write under
+`docs/plans/` went through.
 
-What that does not cover, stated plainly:
+What that does not cover:
 
-- Claude Code runs a project subagent's frontmatter hooks only in a folder
-  whose workspace trust I have accepted, and never in a `claude -p` session.
-  There, only the instructions and the missing tools hold.
-- The test runs the hook directly. That Claude Code calls it for a real
-  designer session has to be seen once by hand: ask the designer to write
-  outside `docs/plans/` and check it is refused.
-- It guards the designer only. The building agent can write anywhere, as it
-  must; "build only from an approved plan" stays a rule it is told.
-
-## When a plan is needed
-
-A new feature, a change to what readers see or can do, or a change to the
-API or stored data. Not for a bug fix, a wording fix, or a refactor that
-changes no behaviour.
-
-## Status
-
-Each plan has one of:
-
-- **Draft**: the designer's proposal; nothing is built from it.
-- **Approved**: I have read it, changed what I disagreed with, answered its
-  open questions, and approved one exact version of it (below).
-- **Built**: shipped, with the evidence below. A merged PR alone is not
-  evidence that the feature does what the plan said.
-- **Dropped**: decided against, with why. Kept, because what was discarded
-  is evidence of judgement too.
-
-## Approving one exact version
-
-Approval is for the plan as it stood, not for whatever the file says later.
-
-1. I edit the draft myself: answer the open questions, change what I
-   disagree with, and fill in "Approval" in the plan (date, and what I
-   changed from the designer's draft). Status becomes `Approved`.
-2. I commit that, alone, with a message starting `Approve plan NNN:`. That
-   commit's hash *is* the approved version. (The hash can't be written in
-   the plan itself, since writing it would change the plan.)
-3. The PR that builds it names that hash: "Builds plan NNN as approved in
-   `<hash>`".
-4. Before building, and again before merging, check nothing changed since:
-
-   ```sh
-   git diff <hash> -- docs/plans/NNN-name.md
-   ```
-
-   While building, this must print nothing. When the plan is marked Built,
-   it may show only the status line and lines under "Built evidence".
-   Anything else means the plan changed after approval: building stops
-   until I approve the new version (a new `Approve plan NNN:` commit), and
-   the change is described under "Revisions".
-
-## Built: what counts as evidence
-
-Marking a plan Built fills in "Built evidence" in the plan:
-
-- the PR, and the approval commit it built from;
-- automated: the `pnpm check` result (files and tests), and each automated
-  acceptance line's test, named;
-- deployment: the CI run that deployed it, and a check of the live site
-  showing the feature there;
-- observed: for each observed acceptance line, what was looked at, where
-  (viewport, guest or signed in, deployed or local), when, and what was seen;
-- my judgement: did it do what the plan was for? What surprised me, and what
-  I'd change next. Written by me, not the agent.
+- Claude Code skips a project subagent's frontmatter hooks in a folder whose
+  workspace trust hasn't been accepted, and in a `claude -p` session. There,
+  only the instructions and the missing tools hold.
+- It guards the designer only. The builder can write anywhere, as it must.
+  That it leaves plans alone, apart from recording approval and Built
+  evidence, is a rule it is told, checked by the `git diff` before merging.
 
 ## File names
 
-`NNN-short-name.md`, numbered in the order written: `001-map-pulses.md`.
+`NNN-short-name.md`, numbered in the order written. Numbers aren't reused:
+001 and 002 were the trial drafts, so the next plan is 003.
 
 ## Template
 
-Copy this into a new file. Leave no section empty: write "none" and say why.
+Leave no section empty: write "none" and why. A brief plan leaves out the
+sections marked *(full)*.
 
 ```markdown
-# NNN. <Feature name>
+# NNN. <Change>
 
-- **Status:** Draft | Approved | Built | Dropped (<why>)
+- **Status:** Draft
+- **Size:** brief | full
 - **README rule served:** <number and name, quoted>
-- **Asked for by:** <me, a crit comment, a user, a measurement>
+- **Asked for:** <the owner's words, quoted>
 
-## Problem
+## Decision
 
-What a reader can't do, or gets wrong, today. Concrete: who, where, when.
+For the owner, at most 150 words: what changes for the reader, the
+recommended option and the strongest alternative with why not, the main
+cost or risk, and each question the owner must answer.
 
 ## What the reader sees
 
-For each, what is on screen and what they can do. The course marks at
-390×844 (phone) and 1920×1080 (desktop) in the latest Chrome; 360 px and
-400 px are extra phone checks.
+Only the views and states this changes; write "unchanged" for the rest.
+Check against: guest and signed in; 390×844 and 1920×1080, with 360 px and
+400 px as extra phone checks; loading, empty, error, sold out, live
+connection lost; and what a second session beside the first sees, and when.
+If anything goes above the feed, say how the first special stays on the
+first screen at 390×844.
 
-- Guest at 390×844 (and 360 px, 400 px)
-- Signed in at 390×844
-- Guest and signed in at 1920×1080
-- Admin, if it differs
-- Real-time: what a second session, open beside the first, sees and when
+## Options *(full)*
 
-And each state: loading, empty, error, live connection lost, sold out.
+At least two, recommended first, each with what the reader sees and its
+cost.
 
-## Rules it must keep
+## Build
 
-Which lines of CLAUDE.md "must never do" and "pages must hold to" this
-touches, and how it keeps them (ids only on the live stream, server-side
-checks, 256 MB, no new dependency, form field names, specials first on the
-page, ...).
-
-## Out of scope
-
-What this deliberately does not do, and why.
-
-## Options considered
-
-At least two, with what the reader would see and the cost of each. The
-recommended one first.
+The files and functions to change, and what each change does. The CLAUDE.md
+rules this touches and how each is kept. What is out of scope.
 
 ## Acceptance
 
-**Automated**: each becomes a test in `spec/`, over HTTP or in the page
-(`spec/page.ts`). Name the file.
+**Automated**, each a test in a named `spec/` file:
 
 - [ ] ...
 
-**Observed**: what only a person can judge, each with where to look
-(viewport, guest or signed in) and what counts as passing.
+**Observed**, each with where to look and what counts as passing:
 
-- [ ] At 390×844 and 1920×1080, guest and signed in: ...
-
-## Open questions
-
-What I must decide before approval.
+- [ ] ...
 
 ## Approval
 
-Empty in a draft. Filled in by me: date, and what I changed from the
-designer's draft and why. The commit that fills this in starts
-`Approve plan NNN:`.
+Empty in a draft.
 
 ## Revisions
 
@@ -168,6 +148,5 @@ Changes after approval: date, what, why, and the new approval commit.
 
 ## Built evidence
 
-Empty until Built. See "Built: what counts as evidence" in
-`docs/plans/README.md`.
+Empty until Built.
 ```
