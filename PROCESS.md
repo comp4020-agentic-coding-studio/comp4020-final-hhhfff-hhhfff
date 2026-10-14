@@ -8,8 +8,8 @@ Someone already in the shop sees the markdown; someone nearby who would
 buy it might never hear about it. I wanted a website where students could
 share these local discounts before they disappeared.
 
-I looked at supermarket specials pages, Xiaohongshu and PetrolSpy while
-developing the idea. The first two helped identify the gap: chain catalogues
+I looked at supermarket specials pages, Xiaohongshu and PetrolSpy. The first
+two helped identify the gap: chain catalogues
 cover their own shops, while social posts scatter information. PetrolSpy
 provided an example of people reporting prices for others
 ([`db68982`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/db68982)).
@@ -21,8 +21,7 @@ The agent built the first version with posting, stock reports and comments
 It used Node and TypeScript, SQLite, and plain HTML and JavaScript. I kept
 this stack because it suited one small machine and a persistent volume,
 without a separate database service or frontend build. The cost is more
-manual work managing the page as interactions grow. The first implementation
-records the chosen stack, not a comparative evaluation.
+manual work managing the page as interactions grow.
 
 The first important correction was basic: the API worked,
 but the Post button did not. A field named `item` conflicted with a browser
@@ -64,20 +63,19 @@ Readers still have to judge whether the photo matches the current offer.
 
 ## Good at neighbourhood scale
 
-This documentation review adds Ben Hoyt's
+I want to focus on shops that students near ANU actually visit. My experience
+at Daily Market gives me a reason to start there, rather than trying to cover
+every supermarket. Ben Hoyt's
 [The small web is beautiful](https://benhoyt.com/writings/the-small-web-is-beautiful/)
-as a comparison, rather than claiming it informed the first version. Hoyt
-argues for fewer moving parts, selective dependencies and useful content;
-he also warns that raw size alone is insufficient. Those criteria fit a
-local service whose value depends on current prices and stock.
+was added later as a reference. His emphasis on fewer moving parts and useful
+content fits this scope: the important information here is the price, the
+shop and whether anything is left.
 
-discountShow focuses on shops around ANU, with no scraping or price-history
-service. That scope makes maintaining a useful local feed more plausible
-than covering every supermarket. However, a small community also means
-fewer people available to correct an error. The three-person quorum is
-therefore a genuine weakness at this scale. Adding another feature will
-not answer whether enough people will contribute. That needs observation
-of actual use.
+But being small also causes a problem. Three matching corrections may be
+reasonable when many people participate; with only a few users, a wrong
+price could stay there for a long time. I have not tested this rule with
+real traffic. Before extending the site further, I need to see whether
+people will keep even this local feed up to date.
 
 ## Crit 9: keeping information current without moving the reader
 
@@ -101,8 +99,7 @@ My own post then briefly appeared as a new post waiting to be loaded:
 its live event could arrive before its publishing response. The fix came
 with a test that deliberately reproduces that order
 ([`f1d0a20`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/f1d0a20)).
-The regression test checks how those messages interact, extending coverage
-beyond the success of each individual request.
+The regression test checks those messages together.
 
 ## Changing how I direct the agent
 
@@ -116,33 +113,32 @@ with test posts; they now run on a temporary app, and `CLAUDE.md` forbids
 writing into that everyday data
 ([`3570400`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/3570400)).
 Another failure was in the test: a map check mistook another test's deletion
-for an unwanted update. `CLAUDE.md` now requires assertions about the test's
-own data
+for an unwanted update. The test guidance now requires assertions about
+the test's own data
 ([`efd6d41`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/efd6d41)).
 
-I then asked for design before implementation
+I added a designer to see the options before implementation and decide
+whether a feature was worth building
 ([`940ec65`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/940ec65)).
-A `designer` subagent proposed options tied to the README, and I decided
-before building. Review strengthened this: approval named a specific plan
-version, and completion required tests, observations and my judgement
+Plans needed my approval, and review added version-specific approval and
+completion evidence
 ([`7719ccc`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/7719ccc)).
-A write-guard hook restricted the designer to the plans directory, and its
-wiring was tested
+A tested hook limited where the designer could write
 ([`0d7351b`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/0d7351b)).
-On 14 October 2026, a real designer session was refused permission to write
-outside that directory while a write inside it succeeded.
+The [recorded session check](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/blob/62f8856/docs/plans/README.md#what-stops-the-designer-writing-elsewhere)
+on 14 October confirmed that restriction.
 
-I removed the designer the same day, before any plan had been built
+After trying it, I noticed replies took much longer. Each change went from
+the main agent to the designer, which read the project and wrote a plan;
+the main agent then read and summarised it before starting. I was waiting
+through that process even for changes in a small project. The two trial
+plans were deleted without being built
+([`ee101ce`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/ee101ce)).
+I decided the extra waiting was not worthwhile and removed the designer
+the same day
 ([`3ae14b5`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/3ae14b5)).
-In practice it added steps to every change: the main agent handed the task
-over, the designer read the code, rules and ADRs and produced a complete
-plan, and the main agent then had to read and condense the result. Going
-through that for each change made the thinking and waiting time noticeably
-longer. The two trial plans had already been deleted unbuilt
-([`ee101ce`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-hhhfff-hhhfff/commit/ee101ce)),
-and a third, for a separate login page, was stopped before it was finished.
-One agent now designs and builds again, under the same `CLAUDE.md` rules,
-specs and browser checks.
+One agent now handles design and implementation. The product rules, tests
+and browser checks remain, and the choice of what to build remains mine.
 
 ## Towards crit 10: checking the idea with other people
 
@@ -152,6 +148,6 @@ need that logging and the exercise where two classmates use only the URL
 while I follow their actions from the logs.
 
 The two-classmate exercise will check independent use and identifiable
-actions. A separate question is whether students will trust the information
+actions. I also need to see whether students will trust the information
 enough to walk to a shop and contribute updates. That broader observation
 has not yet happened.
