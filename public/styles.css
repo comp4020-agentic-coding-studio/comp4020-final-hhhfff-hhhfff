@@ -79,6 +79,55 @@ body {
   color: inherit;
 }
 
+/* the live dot: green and pulsing while changes arrive as they happen */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.18);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.live-badge i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #b9b3a6;
+}
+
+.live-badge[data-state="on"] i {
+  background: #5ee08a;
+  animation: live-pulse 2s ease-out infinite;
+}
+
+.live-badge[data-state="connecting"] i {
+  background: #f3c94a;
+}
+
+.live-badge[data-state="off"] {
+  opacity: 0.7;
+}
+
+.live-badge[data-state="off"] .live-text {
+  text-decoration: line-through;
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(94 224 138 / 0.7); }
+  100% { box-shadow: 0 0 0 0.45rem rgb(94 224 138 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-state="on"] i {
+    animation: none;
+  }
+}
+
 /* Specials · Stores · About: the page you're on is underlined */
 .site-nav {
   display: flex;
@@ -822,6 +871,27 @@ button.small {
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
   100% { box-shadow: 0 0 0 0.5rem transparent; }
+}
+
+/* how many others have this post or store open: quiet, since it's a hint */
+.watching {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  animation: fade-in 0.4s ease-out;
+}
+
+.watching:empty {
+  display: none;
+}
+
+.store-here {
+  display: inline-block;
 }
 
 /* ends today: a countdown to midnight, red for the last two hours */
@@ -2199,9 +2269,14 @@ button.danger {
 
   .site-nav {
     order: 3;
-    flex-basis: 100%;
+    flex: 1;
     margin: 0 0 0 -0.4rem;
     font-size: 0.9rem;
+  }
+
+  /* the live dot sits at the end of the pages' row, which has room for it */
+  .live-badge {
+    order: 4;
   }
 
   .deal {

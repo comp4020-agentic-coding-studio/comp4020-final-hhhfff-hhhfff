@@ -3,7 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join, normalize } from "node:path";
 import { gzipSync } from "node:zlib";
 import { marked } from "marked";
-import { broadcast, listen, tell } from "./events.ts";
+import { broadcast, listen, presence, setWatch, tell } from "./events.ts";
 import { type Action, can, hashPassword, newToken, SESSION_DAYS, type User, verifyPassword } from "./auth.ts";
 import {
   accountByName,
@@ -500,6 +500,25 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === "GET" && path === "/api/events") {
     if (!listen(req, res, whoIs(req)?.id ?? null)) throw new HttpError(503, "too many people are watching live, try again soon");
     return;
+  }
+
+  // how many people are here, and on each post and store: counts, never who
+  if (method === "GET" && path === "/api/here") return send(res, 200, presence());
+
+  // an open page says which posts and store it is showing, by its stream's id
+  if (method === "POST" && path === "/api/watch") {
+    const b = await readJson(req);
+    const stream = typeof b.stream === "string" && /^[0-9a-f]{32}$/.test(b.stream) ? b.stream : null;
+    if (!stream) throw new HttpError(400, "stream must be the id this page's live stream was given");
+    if (!Array.isArray(b.watch) || b.watch.length > 20) throw new HttpError(400, "watch must be a list of at most 20 posts and stores");
+    const watch = b.watch.map((w) => {
+      const deal = typeof w === "string" ? w.match(/^deal:(\d{1,9})$/) : null;
+      if (deal) return `deal:${Number(deal[1])}`;
+      if (typeof w === "string" && w.startsWith("store:") && storeById.has(w.slice(6))) return w;
+      throw new HttpError(400, "watch entries are deal:<id> or store:<id>");
+    });
+    if (!setWatch(stream, whoIs(req)?.id ?? null, watch)) throw new HttpError(404, "no such live stream on this page");
+    return send(res, 200, { watching: watch.length });
   }
 
   // --- accounts

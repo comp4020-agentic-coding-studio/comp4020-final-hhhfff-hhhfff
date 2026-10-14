@@ -368,6 +368,8 @@ function showStorePage() {
   }
   $("#store-title").textContent = store.name;
   $("#store-where").textContent = `${store.where} · ${km(origin, store).toFixed(1)} km from ${origin === ANU ? "ANU" : "you"}`;
+  sendWatchSoon();
+  paintPresence();
   $("#store-live").textContent = store.live === 0 ? "Nothing live here right now."
     : store.live === 1 ? "1 special live now." : `${store.live} specials live now.`;
   $("#store-directions").href = `https://www.openstreetmap.org/directions?to=${store.lat},${store.lon}#map=17/${store.lat}/${store.lon}`;
@@ -450,7 +452,11 @@ function renderFeed() {
   $("#feed").replaceChildren(
     ...deals.map((d) => cardFor(d, byId.get(d.storeId), openComments.has(String(d.id)), openCorrect.has(String(d.id)))),
   );
-  [...$("#feed").children].forEach((li, i) => li.style.setProperty("--i", i)); // staggers the stickers' stamp
+  [...$("#feed").children].forEach((li, i) => {
+    li.style.setProperty("--i", i); // staggers the stickers' stamp
+    paintCardPresence(li);
+  });
+  sendWatchSoon();
   renderPager();
   const store = byId.get($("#store-filter").value);
   const q = query();
@@ -1810,12 +1816,31 @@ function jumpTo(id) {
 
 let live = null;
 
+// the header's dot: green while changes arrive as they happen, grey otherwise
+const LIVE_TEXT = {
+  on: "Live: changes show here as they happen",
+  connecting: "Connecting for live updates…",
+  off: "Not live: changes show when you come back to this tab or reload",
+};
+function showLive(state) {
+  const badge = $("#live");
+  badge.dataset.state = state;
+  badge.title = LIVE_TEXT[state];
+  badge.setAttribute("aria-label", LIVE_TEXT[state]);
+  if (state === "on") paintPresence();
+  else $("#live .live-text").textContent = "Live";
+}
+
 function connectLive() {
   live?.close();
-  if (!window.EventSource) return; // the tab-focus refresh below still works
+  if (!window.EventSource) return showLive("off"); // the tab-focus refresh below still works
   const source = (live = new EventSource("/api/events"));
+  showLive("connecting");
+  // the browser retries by itself; CLOSED means it gave up (the server was full)
+  source.addEventListener("error", () => showLive(source.readyState === EventSource.CLOSED ? "off" : "connecting"));
   let opened = false;
   source.addEventListener("open", () => {
+    showLive("on");
     // a reconnect may have missed events, so catch up
     if (opened) {
       loadFeed();
@@ -2235,7 +2260,79 @@ $("#map-close").addEventListener("click", () => {
 });
 if (mapWasClosed()) showMap(false, { remember: false });
 
+// --- who else is here: counts only, never names. The page tells the server
+// which posts (and store) it shows, over a POST naming its stream; the
+// stream itself only ever says "here" when counts changed, and the page
+// reads them from /api/here like any other public data.
+let stream = null; // this page's live stream, as the server named it
+let watchingKey = "";
+let watchTimer = null;
+let presenceNow = { here: 0, deals: {}, stores: {} };
+
+function watchList() {
+  const store = $("#store-filter").value;
+  if ($("#feed-layout").hidden) return store ? [`store:${store}`] : [];
+  return [...deals.map((d) => `deal:${d.id}`), ...(store ? [`store:${store}`] : [])].slice(0, 20);
+}
+
+function sendWatchSoon() {
+  clearTimeout(watchTimer);
+  watchTimer = setTimeout(async () => {
+    if (!stream) return;
+    const watch = watchList();
+    const key = `${stream}|${watch.join(",")}`;
+    if (key === watchingKey) return;
+    watchingKey = key;
+    await api("/api/watch", { stream, watch }).catch(() => (watchingKey = ""));
+  }, 400);
+}
+
+let hereTimer = null;
+function loadPresenceSoon() {
+  // a tab in the background reads them when it's shown again (below)
+  if (hereTimer || document.visibilityState === "hidden") return;
+  // spread out, like the feed's reloads, so every page doesn't ask at once
+  hereTimer = setTimeout(async () => {
+    hereTimer = null;
+    presenceNow = await api("/api/here").catch(() => presenceNow);
+    paintPresence();
+  }, 200 + Math.random() * 1300);
+}
+
+const peopleText = (n) => (n === 1 ? "1 person" : `${n} people`);
+
+function paintPresence() {
+  const p = presenceNow;
+  const badgeText = $("#live .live-text");
+  badgeText.textContent = $("#live").dataset.state === "on" && p.here > 1 ? `Live · ${p.here}` : "Live";
+  if ($("#live").dataset.state === "on") {
+    $("#live").setAttribute("aria-label", `${LIVE_TEXT.on}. ${peopleText(p.here)} here now.`);
+    $("#live").title = `${LIVE_TEXT.on}. ${peopleText(p.here)} here now, you included.`;
+  }
+  for (const li of document.querySelectorAll("#feed > li.deal")) paintCardPresence(li);
+  const store = $("#store-filter").value;
+  const at = store ? p.stores[store] ?? 0 : 0;
+  $("#store-here").textContent = at > 1 ? `👀 ${othersText(at - 1)} at this store` : "";
+}
+
+const othersText = (n) => (n === 1 ? "1 other looking" : `${n} others looking`);
+
+// on a card: how many others have it open right now, which says it may go soon
+function paintCardPresence(li) {
+  const n = (presenceNow.deals[li.dataset.id] ?? 0) - 1; // not counting me
+  const tag = $(".watching", li);
+  tag.hidden = n < 1;
+  tag.textContent = n < 1 ? "" : `👀 ${othersText(n)}`;
+}
+
 function onLive(ev) {
+  if (ev.type === "hello") {
+    stream = ev.stream;
+    watchingKey = "";
+    sendWatchSoon();
+    return;
+  }
+  if (ev.type === "here") return loadPresenceSoon();
   if (ev.type !== "notice") refreshMapSoon();
   // another admin's review or a deleted comment changes the inbox too
   if (isAdmin() && (ev.type === "deal" || ev.type === "deleted")) loadReports();
@@ -2344,6 +2441,7 @@ async function refreshDeal(id) {
   const commentsOpen = !!card.querySelector("details.comments")?.open;
   const next = cardFor(d, storeById().get(d.storeId), commentsOpen, !!card.querySelector("details.correct")?.open);
   card.replaceWith(next);
+  paintCardPresence(next);
   // a like or a review doesn't change the post itself, so the card may be the
   // same one: open comments are read again either way
   if (commentsOpen && next === card) loadComments(id, next);
@@ -2367,12 +2465,13 @@ $("#store-filter").addEventListener("change", () => {
   showStorePage();
   loadFeed("swap");
 });
-// coming back to the tab picks up what others posted meanwhile
+// coming back to the tab picks up what others posted meanwhile, and who's here
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
   syncMe();
   loadFeed();
   loadNotices();
+  if (stream) loadPresenceSoon();
 });
 
 if (single) showSingleLayout();

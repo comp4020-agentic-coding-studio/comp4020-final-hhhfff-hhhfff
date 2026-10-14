@@ -27,6 +27,8 @@
           <a href="/stores" id="nav-stores">Stores</a>
           <a href="/readme/" id="nav-about">About</a>
         </nav>
+        <!-- green while this page hears changes as they happen; grey while it's reconnecting -->
+        <span id="live" class="live-badge" data-state="connecting" role="img" aria-label="Connecting for live updates…" title="Connecting for live updates…"><i aria-hidden="true"></i><span class="live-text">Live</span></span>
         <nav class="top-links" aria-label="Account">
           <button type="button" id="theme-toggle" class="on-accent quiet theme-toggle" aria-label="Colours: follow the system. Switch to light">◐</button>
           <span id="who" class="who"></span>
@@ -70,6 +72,7 @@
         <h2 id="store-title"></h2>
         <p id="store-where" class="hint"></p>
         <p id="store-live" class="store-live"></p>
+        <p id="store-here" class="watching store-here"></p>
         <p class="store-links">
           <a id="store-directions" target="_blank" rel="noopener noreferrer">Directions ↗</a>
           <button type="button" id="store-share" class="quiet small">Share this store</button>
@@ -300,6 +303,8 @@
           <h3 class="item"><a class="item-link"></a></h3>
           <p class="store"></p>
           <p class="ends-soon" hidden></p>
+          <!-- how many others have this post open right now: counts, never who -->
+          <p class="watching" hidden></p>
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
         <!-- the shelf photo, small until pressed; or a note when it is hidden -->

@@ -30,7 +30,10 @@ not the number of posts:
 4. **Specials are cheaper, or they are not specials.** No post or
    correction can put a special at or above the usual price.
 5. **"Gone" arrives before the walk.** An open page shows changes to the
-   posts on it, and new posts on page one, within moments.
+   posts on it, and new posts on page one, within moments. A badge says
+   whether it is live, and a post or store says how many others have it
+   open, as a count, never who: three others eyeing a "few left" markdown
+   tell a reader to hurry, or not to bother.
 
 Comments are where readers ask "still there?" and answer each other: one
 level of replies, likes (not your own, one each), and deleting your own,
@@ -56,13 +59,17 @@ stripped, gone with their post, hidden after ten reports); comment replies, like
 the ten-report hide with an admin's review and inbox, including reports at once;
 guests being read-only; logins across browsers; no
 password or session token leaking; typo-tolerant search; every live post
-reachable across pages; live updates reaching an open page; and each post's
+reachable across pages; live updates reaching an open page; the live
+badge; who-is-looking counts (one per person however many tabs, gone when
+they leave, never naming anyone, and set only by the page's own person);
+and each post's
 and each store's own address, whose link preview shows the item, price,
 store and stock, or the store and how many specials it has live.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
-and whether "few" means anything to a hungry reader. I have not yet tested
+whether "few" means anything to a hungry reader; and whether "2 others
+looking" makes someone hurry or just feels watched. I have not yet tested
 it with strangers.
 
 ## Sources and what I left out
