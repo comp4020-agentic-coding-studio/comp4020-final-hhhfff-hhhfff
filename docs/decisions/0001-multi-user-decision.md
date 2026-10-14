@@ -5,7 +5,8 @@
 - **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`); 2026-10-14
   (comment replies, likes and shelf photos use the same `deal` signal, now
   tested; references brought up to date); 2026-10-14 (presence adds `hello`
-  and `here`, see ADR 0002)
+  and `here`, see ADR 0002); 2026-10-14 (the map's ripple, from the store
+  list, with no new event)
 - **Decided by:** u8113538
 
 ## Context
@@ -29,12 +30,12 @@ rather than introduce another service.
 
 README rule 5 says that **"Gone" arrives before the walk**: an open page should
 show changes to visible posts and new posts on page one within moments
-(`README.md:32-36`). This supports the larger standard that a student can
+(`README.md:32-39`). This supports the larger standard that a student can
 "trust a single post enough to walk to the shop for it" (`README.md:15-18`).
 
 Those goals pull toward fast automatic updates. The same README also describes
 a small, neighbourhood-scale service and caps live watching at 300 pages
-(`README.md:104`). That pulls against a heavier two-way protocol or sending full
+(`README.md:108`). That pulls against a heavier two-way protocol or sending full
 post data to every listener. The interface should make changes noticeable
 without taking control of the feed away from someone who is reading or typing.
 
@@ -60,6 +61,15 @@ is hidden also sends `deal`, so it disappears for everyone at once; a report
 that does not hide anything sends nothing to the public stream. Showing who
 else is looking (ADR 0002) added two more that still carry no data: `hello`,
 sent only down its own stream with that stream's random id, and a bare `here`.
+
+The map's ripple adds no event at all. The map already read the store list
+again (after a one-second pause) on any event while open; that list now also
+gives each store's `lastReportAt`, the latest posting or stock report among its
+live specials. The page compares it with what it last read: a store whose time
+moved on ripples, and one with fewer live specials shrinks from its old size.
+So a page learns which store had news without the stream naming a store, and
+without fetching posts it isn't showing. The cost is that the ripple waits for
+that pause, and two reports at one store within it make one ripple.
 
 The stream is available to guests, carries no post or credential payload, sends
 a heartbeat every 25 seconds, and asks browsers to reconnect after three
@@ -121,6 +131,13 @@ Automated checks:
 - `spec/new-posts.test.ts` runs the real client in jsdom and delivers the live
   event before the POST response. It verifies that a user's own post is not
   counted in the new-post button and another user's post is counted.
+- `spec/stores.test.ts` verifies that a store's `lastReportAt` moves on with a
+  new post and with each stock report, sold out included.
+  `spec/map-pulse.test.ts` runs the real page in jsdom: a new post and a stock
+  report ripple only that store's dot, sold out and a delete shrink it, and a
+  comment leaves the map still. With either the ripple or the shrink removed
+  from the page, it fails. The motion itself was looked at in Chrome on
+  2026-10-14 at 360px (signed in) and 400px and 1280px (as a guest).
 - The complete `pnpm check` run on 2026-10-14 passed TypeScript checking, all 18
   test files, and all 83 tests. With the broadcast after a like removed from
   the server, the new comment-and-photo test fails, so it does check the signal.
@@ -164,7 +181,7 @@ confusing would justify an automatic, position-preserving insertion instead.
 
 ## References
 
-- `README.md:15-18`, `README.md:32-36`, `README.md:52-67`, `README.md:104`
+- `README.md:15-18`, `README.md:32-39`, `README.md:54-70`, `README.md:108`
 - `PROCESS.md:105-116` (load measurements and request spreading)
 - `server/events.ts:3-61`, `server/events.ts:119-122` (event protocol, listener
   cap, retry and heartbeat)

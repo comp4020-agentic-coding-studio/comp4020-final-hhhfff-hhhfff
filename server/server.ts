@@ -182,12 +182,18 @@ function rankedList(store: string | null, terms: string[] | null): Ranked[] {
   return found;
 }
 
-// Each store with how many of its specials are live and not sold out, for
-// the page's map. Worked out from the same cached keys as the feed.
-function storesWithCounts(): (Store & { live: number })[] {
+// Each store with how many of its specials are live and not sold out, and
+// when one was last posted or had its stock reported (sold out included), so
+// the page's map can pulse a store that just had news. Worked out from the
+// same cached keys as the feed.
+function storesWithCounts(): (Store & { live: number; lastReportAt: string | null })[] {
   const live = new Map<string, number>();
-  for (const k of activeDealKeys(null, todayInCanberra())) if (!k.gone) live.set(k.storeId, (live.get(k.storeId) ?? 0) + 1);
-  return STORES.map((st) => ({ ...st, live: live.get(st.id) ?? 0 }));
+  const latest = new Map<string, string>();
+  for (const k of activeDealKeys(null, todayInCanberra())) {
+    if (!k.gone) live.set(k.storeId, (live.get(k.storeId) ?? 0) + 1);
+    if (k.stockAt > (latest.get(k.storeId) ?? "")) latest.set(k.storeId, k.stockAt);
+  }
+  return STORES.map((st) => ({ ...st, live: live.get(st.id) ?? 0, lastReportAt: latest.get(st.id) ?? null }));
 }
 
 function feedPage(store: string | null, query: string | null, slice: Slice): { deals: Deal[]; total: number } {

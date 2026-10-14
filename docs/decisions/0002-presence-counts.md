@@ -115,7 +115,7 @@ than one process.
 
 ## References
 
-- `README.md:32-36` (rule 5 with the badge and counts), `README.md:52-73`
+- `README.md:32-39` (rule 5 with the badge and counts), `README.md:54-77`
 - `docs/decisions/0001-multi-user-decision.md` (the stream this builds on)
 - `server/events.ts:20-51` (stream ids, one listener record per page),
   `server/events.ts:63-118` (`setWatch`, `presence`, the coalesced signal)

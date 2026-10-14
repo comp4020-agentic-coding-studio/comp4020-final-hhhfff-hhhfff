@@ -1997,6 +1997,9 @@ function placeView() {
 
 let pins = [];
 
+// a dot's radius on screen: bigger for more live specials
+const dotSize = (live) => (live ? 10 + 3 * Math.sqrt(live) : 6);
+
 function drawMap() {
   if (!streets) return void loadStreets();
   const svg = $("#map-svg");
@@ -2022,7 +2025,7 @@ function drawMap() {
       g.setAttribute("aria-label", what);
       const tip = svgEl("title");
       tip.textContent = what;
-      const r = s.live ? 10 + 3 * Math.sqrt(s.live) : 6;
+      const r = dotSize(s.live);
       g.append(tip, svgEl("circle", { r }));
       if (s.live) {
         const n = svgEl("text", { "text-anchor": "middle", dy: "0.35em" });
@@ -2216,9 +2219,42 @@ async function refreshMap() {
   if ($("#store-map").hidden) return;
   const fresh = await api("/api/stores").catch(() => null);
   if (!fresh) return;
-  const live = new Map(fresh.map((s) => [s.id, s.live]));
-  for (const s of stores) s.live = live.get(s.id) ?? 0;
+  const byId = new Map(fresh.map((s) => [s.id, s]));
+  // a store that was posted at or had stock reported since the last look
+  // pulses; one with fewer live specials than before shrinks to its new size
+  const news = new Map();
+  for (const s of stores) {
+    const f = byId.get(s.id);
+    if (!f) continue;
+    if (f.live < s.live) news.set(s.id, { shrinkFrom: s.live });
+    else if (f.lastReportAt && f.lastReportAt !== s.lastReportAt) news.set(s.id, { pulse: true });
+    s.live = f.live;
+    s.lastReportAt = f.lastReportAt;
+  }
   drawMap();
+  for (const [id, n] of news) pulseStore(id, n);
+}
+
+// The dot's ring spreads out once, like a ripple; a shrinking dot starts at its
+// old size and settles. CSS does the moving, and skips it for reduced motion.
+function pulseStore(id, { shrinkFrom }) {
+  const g = $(`#map-svg .map-store[data-store="${id}"]`);
+  if (!g) return;
+  const circle = $("circle", g);
+  const r = Number(circle.getAttribute("r"));
+  const ring = svgEl("circle", { class: "map-pulse", r });
+  g.prepend(ring);
+  if (shrinkFrom !== undefined) {
+    circle.style.setProperty("--was", String(dotSize(shrinkFrom) / r));
+    g.classList.add("shrinking");
+  }
+  g.classList.add("pulsing");
+  ring.addEventListener("animationend", () => {
+    ring.remove();
+    g.classList.remove("pulsing", "shrinking");
+  });
+  // reduced motion fires no animationend; the ring is invisible there anyway
+  setTimeout(() => ring.isConnected && ring.remove(), 2000);
 }
 const refreshMapSoon = () => {
   clearTimeout(mapRefresh);

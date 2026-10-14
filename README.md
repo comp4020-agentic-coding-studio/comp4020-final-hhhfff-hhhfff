@@ -33,7 +33,9 @@ not the number of posts:
    posts on it, and new posts on page one, within moments. A badge says
    whether it is live, and a post or store says how many others have it
    open, as a count, never who: three others eyeing a "few left" markdown
-   tell a reader to hurry, or not to bother.
+   tell a reader to hurry, or not to bother. On the map, a store ripples
+   when something is posted or its stock is reported, and shrinks when it
+   has fewer specials, so news nearby shows before a reader scrolls to it.
 
 Comments are where readers ask "still there?" and answer each other: one
 level of replies, likes (not your own, one each), and deleting your own,
@@ -62,14 +64,16 @@ password or session token leaking; typo-tolerant search; every live post
 reachable across pages; live updates reaching an open page; the live
 badge; who-is-looking counts (one per person however many tabs, gone when
 they leave, never naming anyone, and set only by the page's own person);
-and each post's
+the map's ripple for a post or stock report and shrink for a sold-out or
+deleted special, and no ripple for a comment; and each post's
 and each store's own address, whose link preview shows the item, price,
 store and stock, or the store and how many specials it has live.
 
 Judged, by a person: whether the problem is real, which rests on my own
 experience and not a survey; whether the feed scans quickly on a phone;
-whether "few" means anything to a hungry reader; and whether "2 others
-looking" makes someone hurry or just feels watched. I have not yet tested
+whether "few" means anything to a hungry reader; whether "2 others
+looking" makes someone hurry or just feels watched; and whether a ripple
+on the map is noticed without being a distraction. I have not yet tested
 it with strangers.
 
 ## Sources and what I left out

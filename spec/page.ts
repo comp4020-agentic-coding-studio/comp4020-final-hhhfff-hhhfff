@@ -68,6 +68,8 @@ export async function openPage(as: Person | undefined, { path = "/", network }: 
     scrollTo() {},
   });
   window.Element.prototype.scrollIntoView = () => {};
+  // the street map measures its road labels; any length will do here
+  Object.assign(window.SVGElement.prototype, { getTotalLength: () => 100 });
 
   // app.js is a module with top-level await, which a plain eval refuses
   const code = await (await fetch(new URL("/app.js", baseUrl))).text();

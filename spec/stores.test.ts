@@ -26,7 +26,29 @@ it("store counts are numbers for every store, and the list says nothing about wh
   const { status, data } = await call("/api/stores");
   expect(status).toBe(200);
   for (const s of data) {
-    expect(Object.keys(s).sort()).toEqual(["id", "kind", "lat", "live", "lon", "name", "where"]);
+    expect(Object.keys(s).sort()).toEqual(["id", "kind", "lastReportAt", "lat", "live", "lon", "name", "where"]);
     expect(Number.isInteger(s.live) && s.live >= 0).toBe(true);
+    expect(s.lastReportAt === null || !Number.isNaN(Date.parse(s.lastReportAt))).toBe(true);
+  }
+});
+
+// The map pulses a store that just had news: each store says when one of its
+// live specials was last posted or had its stock reported, sold out included.
+const lastReportAt = async (store: string) => (await call("/api/stores")).data.find((s: any) => s.id === store).lastReportAt;
+
+it.runIf(writes)("a store's last report moves on with a new post and with each stock report, sold out too", async () => {
+  const store = "iga-southeast"; // no other spec posts here
+  const poster = await person("Pulse poster");
+  const { data: deal } = await call("/api/deals", special(poster, { storeId: store }));
+  const posted = await lastReportAt(store);
+  expect(posted).toBe(deal.createdAt);
+
+  // two people, since one may report a post's stock once a minute
+  for (const stock of ["few", "gone"]) {
+    const before = await lastReportAt(store);
+    await new Promise((r) => setTimeout(r, 5)); // a later millisecond
+    const reporter = await person(`Pulse ${stock}`);
+    expect((await call(`/api/deals/${deal.id}/stock`, { stock, author: reporter.as })).status).toBe(200);
+    expect(await lastReportAt(store) > before, `after "${stock}"`).toBe(true);
   }
 });
