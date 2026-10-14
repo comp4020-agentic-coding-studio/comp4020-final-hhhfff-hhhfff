@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { JPEG, baseUrl, call, person, special, writes } from "./api.ts";
+import { openPage } from "./page.ts";
 
 // A post has its own address, /deals/<id>, so it can be passed on in a chat
 // the way friends already pass on cheap food. The page there is the app's
@@ -14,6 +15,26 @@ const meta = (html: string, property: string) =>
   html.match(new RegExp(`<meta (?:property|name)="${property}" content="([^"]*)"`))?.[1];
 
 describe.skipIf(!writes)("a post's own page", () => {
+  // The store pages (398d7af) un-hid these on every page but /stores, this
+  // one included, after the post's own layout (398893a) had hidden them.
+  it("shows the post alone: no search row, map, post button, pages or chains around it", async () => {
+    const poster = await person("spec share");
+    const { data: deal } = await call("/api/deals", special(poster));
+    for (const as of [undefined, poster]) {
+      const { window, doc } = await openPage(as, { path: `/deals/${deal.id}` });
+      try {
+        const who = as ? "signed in" : "guest";
+        expect(doc.querySelector<HTMLElement>("#single-head")!.hidden, who).toBe(false);
+        expect(doc.querySelectorAll("#feed .deal").length, who).toBe(1);
+        for (const sel of [".filters", "#filters-top", "#store-map", "#post-toggle", "#chains", "#pager"]) {
+          expect(doc.querySelector<HTMLElement>(sel)!.hidden, `${who}: ${sel}`).toBe(true);
+        }
+      } finally {
+        window.close();
+      }
+    }
+  });
+
   it("serves the app with the post's title, price, store and stock in the link preview", async () => {
     const poster = await person("spec share");
     const { data: deal } = await call("/api/deals", special(poster, { wasCents: 400, nowCents: 300, stock: "few" }));
