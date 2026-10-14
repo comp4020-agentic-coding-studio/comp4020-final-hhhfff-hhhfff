@@ -1,17 +1,11 @@
 import { describe, expect, inject, it } from "vitest";
-import { baseUrl, call, person, special, writes, type Person } from "./api.ts";
+import { JPEG, baseUrl, call, person, special, writes, type Person } from "./api.ts";
 
 // A post may carry one shelf photo: the tag with the price, what's left and
 // the item, in one picture. Only its poster adds or replaces it; it is a
 // JPEG, its metadata (GPS and all) is dropped by the server whatever the
 // page did, and it goes when the post goes. Ten people reporting it hide it
 // until an admin looks, as with a comment.
-
-// an 8×6 JPEG, as Chrome's canvas encodes one (with an ICC profile segment)
-const JPEG = Buffer.from(
-  "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAGAAgDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAiEAABAgMJAAAAAAAAAAAAAAAAERQCBRIVFiIlMjNSVKH/xAAVAQEBAAAAAAAAAAAAAAAAAAAGB//EABsRAAIBBQAAAAAAAAAAAAAAAAIRAAFBYXHw/9oADAMBAAIRAxEAPwCssJreB3bOV9BrBwTcWrVi8ABKiOpJ2wu3ExFUk7YXbn//2Q==",
-  "base64",
-);
 
 // the same picture with an EXIF segment saying where it was taken
 function withGps(): Buffer {

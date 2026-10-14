@@ -427,10 +427,11 @@ export interface DealKey {
   itemKey: string; // the item normalised, as stored, so a search needn't redo it
   createdAt: string;
   gone: boolean;
+  stockAt: string; // its latest stock report, or its posting, which is the first
 }
 
 const selectKeys = `
-  SELECT d.id, d.store_id, d.item, d.item_key, d.created_at, s.stock = 'gone' AS gone
+  SELECT d.id, d.store_id, d.item, d.item_key, d.created_at, s.stock = 'gone' AS gone, s.created_at AS stock_at
   FROM deals d
   JOIN stock_reports s ON s.id = (SELECT max(id) FROM stock_reports WHERE deal_id = d.id)
 `;
@@ -442,6 +443,7 @@ const toKey = (r: Row): DealKey => ({
   itemKey: r.item_key as string,
   createdAt: r.created_at as string,
   gone: !!r.gone,
+  stockAt: r.stock_at as string,
 });
 
 // Every write that can change the feed's order or membership (a post, a

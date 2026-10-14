@@ -2,7 +2,11 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-07
-- **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`)
+- **Updated:** 2026-10-10 (own-post race fixed in `f1d0a20`); 2026-10-14
+  (comment replies, likes and shelf photos use the same `deal` signal, now
+  tested; references brought up to date); 2026-10-14 (presence adds `hello`
+  and `here`, see ADR 0002); 2026-10-14 (the map's ripple, from the store
+  list, with no new event)
 - **Decided by:** u8113538
 
 ## Context
@@ -26,12 +30,12 @@ rather than introduce another service.
 
 README rule 5 says that **"Gone" arrives before the walk**: an open page should
 show changes to visible posts and new posts on page one within moments
-(`README.md:32-33`). This supports the larger standard that a student can
+(`README.md:32-39`). This supports the larger standard that a student can
 "trust a single post enough to walk to the shop for it" (`README.md:15-18`).
 
 Those goals pull toward fast automatic updates. The same README also describes
 a small, neighbourhood-scale service and caps live watching at 300 pages
-(`README.md:71`). That pulls against a heavier two-way protocol or sending full
+(`README.md:108`). That pulls against a heavier two-way protocol or sending full
 post data to every listener. The interface should make changes noticeable
 without taking control of the feed away from someone who is reading or typing.
 
@@ -46,7 +50,26 @@ so the reader chooses when to reload and does not get pushed down the feed.
 A deleted post's card disappears at once; only the refill, the next post moving
 up to keep the page full, waits a random delay of up to two seconds, coalescing
 multiple events. Corrections intended for a poster use the same connection but
-are sent only to that signed-in user's listeners.
+are sent only to that signed-in user's listeners, and so are notices to admins
+that their report inbox changed.
+
+Features added after this decision ride on the same four event types rather
+than adding new ones. A comment, reply, like or deleted comment, and a shelf
+photo added, removed or restored, each send `deal` with the post's ID, so the
+page refetches that one card. A comment or photo that reaches ten reports and
+is hidden also sends `deal`, so it disappears for everyone at once; a report
+that does not hide anything sends nothing to the public stream. Showing who
+else is looking (ADR 0002) added two more that still carry no data: `hello`,
+sent only down its own stream with that stream's random id, and a bare `here`.
+
+The map's ripple adds no event at all. The map already read the store list
+again (after a one-second pause) on any event while open; that list now also
+gives each store's `lastReportAt`, the latest posting or stock report among its
+live specials. The page compares it with what it last read: a store whose time
+moved on ripples, and one with fewer live specials shrinks from its old size.
+So a page learns which store had news without the stream naming a store, and
+without fetching posts it isn't showing. The cost is that the ripple waits for
+that pause, and two reports at one store within it make one ripple.
 
 The stream is available to guests, carries no post or credential payload, sends
 a heartbeat every 25 seconds, and asks browsers to reconnect after three
@@ -100,15 +123,24 @@ Automated checks:
 
 - `spec/live.test.ts` opens the real `/api/events` stream and verifies that a
   guest receives `new`, `deal`, and `deleted` events for posting, stock,
-  comments, confirmations, and deletion.
+  comments, confirmations, and deletion, and `deal` events for a comment
+  reply, a like, a deleted comment, and a shelf photo added or removed.
 - The same test verifies that broadcast frames contain only `type` and `id`,
   never the poster's name or session token, and that a correction notice reaches
   the poster but not a bystander.
 - `spec/new-posts.test.ts` runs the real client in jsdom and delivers the live
   event before the POST response. It verifies that a user's own post is not
   counted in the new-post button and another user's post is counted.
-- The complete `pnpm check` run on 2026-10-10 passed TypeScript checking, all 16
-  test files, and all 70 tests.
+- `spec/stores.test.ts` verifies that a store's `lastReportAt` moves on with a
+  new post and with each stock report, sold out included.
+  `spec/map-pulse.test.ts` runs the real page in jsdom: a new post and a stock
+  report ripple only that store's dot, sold out and a delete shrink it, and a
+  comment leaves the map still. With either the ripple or the shrink removed
+  from the page, it fails. The motion itself was looked at in Chrome on
+  2026-10-14 at 360px (signed in) and 400px and 1280px (as a guest).
+- The complete `pnpm check` run on 2026-10-14 passed TypeScript checking, all 18
+  test files, and all 83 tests. With the broadcast after a like removed from
+  the server, the new comment-and-photo test fails, so it does check the signal.
 
 Measured and manually judged:
 
@@ -149,15 +181,16 @@ confusing would justify an automatic, position-preserving insertion instead.
 
 ## References
 
-- `README.md:15-18`, `README.md:32-33`, `README.md:41-53`, `README.md:71`
+- `README.md:15-18`, `README.md:32-39`, `README.md:54-70`, `README.md:108`
 - `PROCESS.md:105-116` (load measurements and request spreading)
-- `server/events.ts:3-46` (event protocol, listener cap, retry and heartbeat)
-- `server/server.ts:396-400` (SSE endpoint)
+- `server/events.ts:3-61`, `server/events.ts:119-122` (event protocol, listener
+  cap, retry and heartbeat)
+- `server/server.ts:498-502` (SSE endpoint)
 - `public/app.js`, `connectLive` (connection and reconnect catch-up)
 - `public/app.js`, `onLive`, `newPostWaiting`, `notWaiting`, `reloadSoon`,
   `refreshDeal` and `busy` (event handling, new-post queue, coalesced reload,
   card refresh and busy-card protection)
-- `spec/live.test.ts:54-115`
+- `spec/live.test.ts:9-100`, with the stream reader in `spec/stream.ts`
 - `spec/new-posts.test.ts:69-95`
 - `d206304` — introduce ID-only Server-Sent Events and live-update tests
 - `6ccc571` — limit refetches, distinguish new posts, and spread reloads

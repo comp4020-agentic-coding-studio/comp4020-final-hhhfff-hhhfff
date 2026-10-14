@@ -79,6 +79,185 @@ body {
   color: inherit;
 }
 
+/* the live dot: green and pulsing while changes arrive as they happen */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.18);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.live-badge i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #b9b3a6;
+}
+
+.live-badge[data-state="on"] i {
+  background: #5ee08a;
+  animation: live-pulse 2s ease-out infinite;
+}
+
+.live-badge[data-state="connecting"] i {
+  background: #f3c94a;
+}
+
+.live-badge[data-state="off"] {
+  opacity: 0.7;
+}
+
+.live-badge[data-state="off"] .live-text {
+  text-decoration: line-through;
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgb(94 224 138 / 0.7); }
+  100% { box-shadow: 0 0 0 0.45rem rgb(94 224 138 / 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-state="on"] i {
+    animation: none;
+  }
+}
+
+/* Specials · Stores · About: the page you're on is underlined */
+.site-nav {
+  display: flex;
+  gap: 0.15rem;
+  margin-right: auto;
+  font-size: 0.95rem;
+}
+
+.site-nav a {
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  color: var(--accent-ink);
+  text-decoration: none;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.site-nav a:hover {
+  opacity: 1;
+  background: rgb(255 255 255 / 0.12);
+}
+
+.site-nav a[aria-current="page"] {
+  opacity: 1;
+  box-shadow: inset 0 -2px 0 var(--accent-ink);
+  border-radius: 0;
+}
+
+.masthead .site-nav :focus-visible {
+  outline-color: #fff;
+}
+
+/* a store's own page: its name, where it is, what's live, and how to get there */
+.store-head {
+  margin-top: 1rem;
+}
+
+.store-head .back {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.store-head h2 {
+  margin: 0.35rem 0 0;
+  font-size: 1.4rem;
+}
+
+.store-head .hint {
+  margin: 0.1rem 0 0;
+}
+
+.store-live {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+.store-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0.6rem 0 0;
+}
+
+.store-links a {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#store-share-status:empty {
+  display: none;
+}
+
+/* every store, a row each, the ones with specials first */
+.store-dir {
+  margin-top: 1rem;
+}
+
+.store-dir h2 {
+  margin: 0;
+}
+
+.store-dir-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+}
+
+.store-dir-list li + li {
+  border-top: 1px solid var(--line);
+}
+
+.store-dir-list a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 0.75rem;
+  padding: 0.6rem 0.25rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.store-dir-list a:hover .store-dir-name {
+  text-decoration: underline;
+}
+
+.store-dir-name {
+  font-weight: 600;
+}
+
+.store-dir-list small {
+  grid-column: 1;
+  color: var(--muted);
+}
+
+.store-dir-count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.store-dir-count[data-live="yes"] {
+  background: var(--tint);
+  color: var(--ink);
+}
+
 .top-links .who {
   font-weight: 600;
 }
@@ -124,7 +303,9 @@ button.theme-toggle {
   line-height: 1.2;
 }
 
-.masthead .title a {
+.masthead .title a,
+.brand-link {
+  color: inherit;
   text-decoration: none;
 }
 
@@ -619,6 +800,41 @@ button.small {
   gap: 0 1rem;
 }
 
+/* the item's name opens the post on its own page, to share */
+.item-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.item-link:hover,
+.item-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.single-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.single-head .back {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.single-head .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.single-head .hint:empty {
+  display: none;
+}
+
 /* Freshness: a strip down the card's left edge, green within the hour,
    amber within six, then faint; a pulsing dot for the last ten minutes. */
 .deal {
@@ -655,6 +871,27 @@ button.small {
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 60%, transparent); }
   100% { box-shadow: 0 0 0 0.5rem transparent; }
+}
+
+/* how many others have this post or store open: quiet, since it's a hint */
+.watching {
+  align-self: flex-start;
+  margin: 0.35rem 0 0;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  animation: fade-in 0.4s ease-out;
+}
+
+.watching:empty {
+  display: none;
+}
+
+.store-here {
+  display: inline-block;
 }
 
 /* ends today: a countdown to midnight, red for the last two hours */
@@ -1723,6 +1960,32 @@ button.danger {
   stroke-width: 4px;
 }
 
+/* news at a store: a ring spreads from its dot once. Invisible at rest, so
+   with motion reduced (animations off) nothing shows. */
+.map-store circle.map-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+  filter: none;
+  opacity: 0;
+  pointer-events: none;
+  animation: map-pulse 1.4s ease-out;
+}
+
+@keyframes map-pulse {
+  from { opacity: 0.9; scale: 1; }
+  to { opacity: 0; scale: 2.6; }
+}
+
+/* fewer live specials: the dot starts at its old size (--was, a ratio) and settles */
+.map-store.shrinking circle:not(.map-pulse) {
+  animation: map-shrink 0.9s ease-in-out;
+}
+
+@keyframes map-shrink {
+  from { scale: var(--was, 1); }
+}
+
 .map-side {
   display: none;
 }
@@ -2024,6 +2287,24 @@ button.danger {
     display: none;
   }
 
+  /* the name and the account share the top row, the site's pages the second,
+     so adding pages didn't push the first special down */
+  .masthead {
+    padding: 0.5rem 0 0.15rem;
+  }
+
+  .site-nav {
+    order: 3;
+    flex: 1;
+    margin: 0 0 0 -0.4rem;
+    font-size: 0.9rem;
+  }
+
+  /* the live dot sits at the end of the pages' row, which has room for it */
+  .live-badge {
+    order: 4;
+  }
+
   .deal {
     padding: 0.85rem;
   }
@@ -2047,6 +2328,10 @@ button.danger {
   .top-links {
     gap: 0.45rem;
     font-size: 0.9rem;
+  }
+
+  .site-nav a {
+    padding: 0.25rem 0.4rem;
   }
 
   button.on-accent {

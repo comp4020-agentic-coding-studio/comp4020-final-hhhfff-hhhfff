@@ -3,8 +3,13 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- page meta: the server puts one post's (or store's) own title and preview here -->
     <title>discountShow</title>
     <meta name="description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <meta property="og:site_name" content="discountShow" />
+    <meta property="og:title" content="discountShow" />
+    <meta property="og:description" content="Supermarket specials near ANU, spotted and kept up to date by students." />
+    <!-- /page meta -->
     <!-- before the styles, so a chosen theme is in place before anything paints -->
     <script src="/theme.js"></script>
     <link rel="stylesheet" href="/styles.css" />
@@ -14,11 +19,17 @@
     <header class="masthead">
       <div class="wrap masthead-row">
         <div class="brand">
-          <h1>discountShow</h1>
+          <h1><a href="/" class="brand-link">discountShow</a></h1>
           <p class="tagline">Cheap food, spotted by students, for students.</p>
         </div>
-        <nav class="top-links" aria-label="Site and account">
-          <a href="/readme/">About</a>
+        <nav class="site-nav" aria-label="Site">
+          <a href="/" id="nav-specials">Specials</a>
+          <a href="/stores" id="nav-stores">Stores</a>
+          <a href="/readme/" id="nav-about">About</a>
+        </nav>
+        <!-- green while this page hears changes as they happen; grey while it's reconnecting -->
+        <span id="live" class="live-badge" data-state="connecting" role="img" aria-label="Connecting for live updates…" title="Connecting for live updates…"><i aria-hidden="true"></i><span class="live-text">Live</span></span>
+        <nav class="top-links" aria-label="Account">
           <button type="button" id="theme-toggle" class="on-accent quiet theme-toggle" aria-label="Colours: follow the system. Switch to light">◐</button>
           <span id="who" class="who"></span>
           <button type="button" id="show-login" class="on-accent" aria-controls="account" aria-expanded="false">Log in</button>
@@ -53,6 +64,20 @@
             <button type="button" id="register-btn" class="quiet">Create account</button>
           </div>
         </form>
+      </section>
+
+      <!-- a store's own page (/stores/coles-civic): where it is and what's live there -->
+      <section id="store-head" class="card store-head" aria-labelledby="store-title" hidden>
+        <a href="/stores" class="back">← All stores</a>
+        <h2 id="store-title"></h2>
+        <p id="store-where" class="hint"></p>
+        <p id="store-live" class="store-live"></p>
+        <p id="store-here" class="watching store-here"></p>
+        <p class="store-links">
+          <a id="store-directions" target="_blank" rel="noopener noreferrer">Directions ↗</a>
+          <button type="button" id="store-share" class="quiet small">Share this store</button>
+        </p>
+        <p class="hint" id="store-share-status" aria-live="polite"></p>
       </section>
 
       <!-- when this scrolls away, the search row below is stuck to the top -->
@@ -99,6 +124,13 @@
         </div>
         </div>
         <p class="hint map-hint">Bigger dot, more specials. Drag or pinch the map; pick a store to see only its specials.</p>
+      </section>
+
+      <!-- /stores: every store, fullest first, each opening its own page -->
+      <section id="store-dir" class="card store-dir" aria-labelledby="store-dir-heading" hidden>
+        <h2 id="store-dir-heading">Stores near ANU</h2>
+        <p class="hint">Supermarkets and grocers within a walk or a short ride of campus, with how many specials each has live now.</p>
+        <ol id="store-dir-list" class="store-dir-list"></ol>
       </section>
 
       <!-- most visitors come to browse, so the form stays folded until asked for -->
@@ -170,6 +202,13 @@
 
       <!-- with posts, the chains' links sit beside the feed (below it on a phone);
            with none, they fill the middle under a note that nothing is shared yet -->
+      <!-- one post on its own page (/deals/123): a link someone shared lands here -->
+      <nav id="single-head" class="single-head" aria-label="Where you are" hidden>
+        <a href="/" class="back">← All specials</a>
+        <button type="button" id="share" class="quiet small">Share this special</button>
+        <p class="hint" id="share-status" aria-live="polite"></p>
+      </nav>
+
       <div id="feed-layout" class="feed-layout">
         <section aria-labelledby="feed-heading">
           <h2 id="feed-heading" class="visually-hidden" tabindex="-1">Specials</h2>
@@ -261,9 +300,11 @@
     <template id="deal-template">
       <li class="card deal">
         <div class="deal-head">
-          <h3 class="item"></h3>
+          <h3 class="item"><a class="item-link"></a></h3>
           <p class="store"></p>
           <p class="ends-soon" hidden></p>
+          <!-- how many others have this post open right now: counts, never who -->
+          <p class="watching" hidden></p>
         </div>
         <p class="prices"><strong class="now"></strong> <s class="was"></s> <span class="off"></span></p>
         <!-- the shelf photo, small until pressed; or a note when it is hidden -->

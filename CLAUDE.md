@@ -82,6 +82,10 @@ README, stop and say so rather than picking one.
   has changed, and say why in the commit message.
 - When a correction comes from the user, record it here (or in `spec/`) so
   it isn't repeated; don't just retry until green.
+- Spec files run at the same time against one app, so a test may only
+  assert about what it caused: give it a store no other spec posts at, and
+  never assert "nothing else changed" across the app. A map test that did
+  passed locally and failed in CI when another file deleted a Coles post.
 - Tests get an identity from `person()` in `spec/api.ts`, which registers a
   real account. Don't put an identity in a request body; it is ignored.
 - Don't write Python for edits here: on this machine `python` is only the
