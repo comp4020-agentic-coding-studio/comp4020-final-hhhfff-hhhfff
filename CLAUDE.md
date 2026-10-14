@@ -1,134 +1,89 @@
 # Rules for the agent
 
-This is discountShow: a multi-user app where students post supermarket
-specials near ANU and keep them honest. `README.md` argues what "good"
-means; the rules below follow from it. If a change conflicts with the
-README, stop and say so rather than picking one.
-
-## Run and check
-
-- Start: `PORT=8080 DATA_DIR=.localdata node server/server.ts`
-- `pnpm check` (typecheck + `spec/` tests over HTTP) must pass before any
-  commit. With no `APP_URL` it starts its own app on a throwaway data
-  directory (with `ADMIN_USERS=spec-admin`, so the admin test runs) and
-  removes it after; you don't need the app running. Tests must never write
-  into `.localdata`, the data the user browses: don't point `APP_URL` at the
-  app on 8080 (a correction from the user, after test posts piled up there).
-- With `APP_URL` set (CI sets it to the Docker image), the tests run against
-  that app instead; the admin test runs only if `SPEC_ADMIN_USER` names an
-  admin it was started with.
-- `pnpm check:evidence` must pass before a crit cutoff.
-- Node 24 runs the TypeScript directly; there is no build step. The only
-  runtime dependency is `marked`. Don't add dependencies without asking.
-- The app must fit one shared-cpu-1x machine with 256 MB. Persistent data
-  lives only in SQLite under `DATA_DIR` (`/data` on Fly). Don't edit
-  `fly.toml`, and keep `Dockerfile` working.
+discountShow helps students decide whether a local discount is worth the walk.
+`README.md` defines what good means. Keep the app, rules and checks consistent
+with that argument; ask the owner before changing it.
 
 ## What the app must never do
 
-- Show a "special" that isn't cheaper than the usual price. Enforce on the
-  server, including when applied through a correction.
-- Allow two live posts for the same item at the same store, whoever posted
-  them, including when posted at the same moment or made so by a correction.
-  Check and write in one transaction (`createDeal`, `proposeCorrection`).
-- Reveal anyone's password, password hash or session token in any response,
-  or let a public id (the user id shown on posts) stand in for a session.
-- Let a guest (no valid session) change anything. Identity comes only from
-  the session cookie, never from the request body; permissions come from the
-  role table in `server/auth.ts` and are checked on the server, not just by
-  hiding buttons.
-- Let anyone but the poster, or an admin, delete a post. Roles are guest,
-  user and admin; admins come only from the `ADMIN_USERS` environment
-  variable, never from the API.
-- Trust client input. Everything goes through the validators in
-  `server/server.ts`; SQL uses parameters only; user text is rendered with
-  `textContent`, never `innerHTML`.
-- Count a poster's own vote, or one person's repeat votes, towards the
-  three-person correction quorum. One person is one account.
-- Let one account report a post's stock more than once a minute.
-- Put anything but ids on the live stream (`/api/events`): the page fetches
-  the deal itself, so what it sees is decided by the normal read routes.
-  Cap its listeners; the machine has 256 MB.
-- Lose data on restart or redeploy.
+- Mislead readers: a special must be cheaper than its usual price, and the
+  same item at the same store must not have conflicting live posts, including
+  concurrent posts and corrections.
+- Let people act as someone else: identity comes only from the session
+  cookie, never a request body or public user ID. Guests read but cannot
+  write; check permissions on the server (`spec/accounts.test.ts`).
+- Give anyone admin rights through the API. Admins come only from
+  `ADMIN_USERS` (`spec/admins.test.ts`, `spec/accounts.test.ts`). Only the
+  poster or an admin can delete a post (`spec/delete.test.ts`).
+- Expose passwords or password hashes in any response, or session tokens
+  in response bodies or events. Session tokens belong only in the protected
+  session cookie (`spec/specials.test.ts`, `spec/accounts.test.ts`).
+- Broadcast full posts or credentials through `/api/events`: send event
+  types and identifiers, or payload-free signals; keep connection identifiers
+  and notices scoped to their connection or owner. Read data through normal
+  routes (`spec/live.test.ts`, `spec/presence.test.ts`).
+- Trust unvalidated input or treat user text as executable markup. Use
+  parameterised SQL and `textContent`, never `innerHTML`, for user text.
+  Check this when reviewing rendering changes; no dedicated injection test
+  currently establishes this guarantee. Follow the binding
+  [development rules](docs/development.md#data-and-security).
+- Let one person's repeated actions count as several people's agreement.
+  Preserve the correction and reporting rules in the README.
+- Lose persistent data on restart or redeploy, or let tests modify the data
+  the owner uses.
 
 ## What the pages must hold to
 
-- Specials come first on the page; the post form stays folded. The store
-  map starts open (the user's decision; closing it is remembered on the
-  device), so it stays short on a phone and the first special still shows
-  on the first screen at 390×844, and at 360px and 400px. A guest sees
-  the feed and a prompt to log in, and the write buttons ask them to.
-- A guest's card is read-only: how much is left, confirmations, corrections
-  and comments, with no buttons that would only be refused. Sold-out posts
-  sort after the rest. Before anything loads, the page says it's loading.
-- The course marks at exactly two viewports in the latest Chrome:
-  **390×844** (phone, DevTools' iPhone preset) and **1920×1080** (desktop),
-  and everything must work cleanly at both (`topics/assessment`, "Marking
-  environment"). Real-time is marked with one session at each, side by side.
-- Check UI changes at 390×844 and 1920×1080 first, then 360px and 400px as
-  extra phone checks, logged in and as a guest. Set the height too, not just
-  the width: "on the first screen" depends on it. Plain headless Chrome
-  below ~500px lays out wider than asked, and
-  `--dump-dom`/`--virtual-time-budget` never finish because of the live
-  stream; drive Chrome over its DevTools protocol instead, and close each tab
-  (each holds a live connection, and plain HTTP allows six per host).
-- Works at both marking viewports, and at 360px and 400px, with no
-  horizontal scroll.
-- Prices are integer cents in storage, dollars in display. "Today" is
-  Canberra's today.
-- No form field may be named after a built-in form property (`item` was
-  once such a name and silently broke Post; see `spec/forms.test.ts`).
-- `/readme/` must serve all of `README.md`; its headings are checked.
-
-## Changes must not break
-
-- Every test in `spec/` stays green. A change to behaviour comes with a new
-  or updated test in `spec/*.test.ts`, written against the running app over
-  HTTP, in the same commit.
-- Fix the code, not the test. Only loosen a test when the README's argument
-  has changed, and say why in the commit message.
-- When a correction comes from the user, record it here (or in `spec/`) so
-  it isn't repeated; don't just retry until green.
-- Spec files run at the same time against one app, so a test may only
-  assert about what it caused: give it a store no other spec posts at, and
-  never assert "nothing else changed" across the app. A map test that did
-  passed locally and failed in CI when another file deleted a Coles post.
-- Tests get an identity from `person()` in `spec/api.ts`, which registers a
-  real account. Don't put an identity in a request body; it is ignored.
-- Don't write Python for edits here: on this machine `python` is only the
-  Windows Store stub and silently does nothing. Use the Edit tool or node.
+- Put finding useful discounts first: with the map open, the first special
+  must be visible at 390×844. Preserve the feed and map behaviour in
+  [the interface rules](docs/development.md#interface-and-browser-checks);
+  make stock and freshness understandable. The first-screen layout requires
+  an observed browser check; `spec/pages.test.ts` checks feed pagination
+  and ordering, not this layout.
+- Keep visible information current without disrupting reading or unfinished
+  input. Preserve the live channel's privacy and resource limits.
+- Make guest and signed-in behaviour clear, including loading, empty, error
+  and disconnected states.
+- Check UI changes at 390×844 and 1920×1080, with extra checks at 360px and
+  400px, as a guest and signed in. Keep the full README available at `/readme/`.
+  Follow [Development notes](docs/development.md) for browser checks.
 
 ## Design before building
 
-- A new feature, a change to what readers see or can do, or a change to the
-  API or stored data starts as a plan in `docs/plans/`, written by the
-  `designer` subagent (`.claude/agents/designer.md`) from the template in
-  `docs/plans/README.md`. A bug fix, a wording fix or a pure refactor doesn't
-  need one.
-- Build only from a plan the user approved, at the exact version in their
-  `Approve plan NNN:` commit; the building PR names that commit. Before
-  building and before merging, `git diff <that commit> -- <plan>` must show
-  no change to the plan (see `docs/plans/README.md`). Don't approve a plan
-  or edit an approved one yourself, and don't redesign while building: if
-  the plan turns out wrong, stop, say what is wrong, and wait for a new
-  approval.
-- The plan's **automated** acceptance lines become tests in `spec/`; its
-  **observed** lines are checked by looking, at the viewports they name,
-  and what was seen is recorded. Marking a plan **Built** needs the evidence
-  listed in `docs/plans/README.md`: the PR and approval commit, the test
-  results, the deploy and a live check, the observations, and the user's own
-  judgement of whether it did what the plan was for. Leave that last part
-  for the user to write; a merged PR is not evidence on its own.
+- Size the change first ([plan sizes](docs/plans/README.md#size-first)).
+  Bug fixes, wording, local styling and refactors that preserve behaviour
+  need no plan. Other changes to what readers see or can do need a brief
+  plan; identity, privacy, multi-user behaviour, the API or stored data
+  need a full one.
+- Only the `designer` subagent writes plans, from the owner's request in
+  the owner's words. Don't write a plan yourself or have another agent
+  stand in for the designer.
+- Build only from the approved version. Do not approve it yourself or
+  change its design while building; if it proves wrong, stop and return to
+  the owner. Follow [the plan workflow](docs/plans/README.md) for approval,
+  revisions and Built evidence; a merged PR alone does not establish that a
+  feature is good.
 
-## Working style
+## Check and learn
 
-- Changes reach `main` through a pull request, never a direct push: push a
-  branch, open the PR (linking its plan, if any), merge only after CI's
-  `check` passes, and merge with a merge commit (the user's teacher reads
-  the PRs). Merging deploys to Fly; check the live site after.
-- Small commits, one idea each, with a message saying why. The history is
-  process evidence: don't squash or rewrite it.
-- Keep `README.md` truthful: when you add or remove a promise (real-time
-  push, logging), update the enforced/judged section in the same change.
-- Don't write `PROCESS.md` or the `reflections/` files for the user; they
-  must be the user's own account.
+- `pnpm check` must pass before a commit; `pnpm check:evidence` must pass
+  before a crit cutoff. Use isolated test data as described in
+  [spec/README.md](spec/README.md).
+- Behaviour changes need relevant checks in the same commit. Diagnose whether
+  a failure is in the app or the test. Never weaken a valid requirement just
+  to pass; explain the evidence for any test correction.
+- Turn consequential mistakes and owner corrections into a lasting rule,
+  test or referenced note. Check the real page when the claim concerns
+  how someone uses it, rather than relying only on API results.
+
+## Working boundaries
+
+- Keep the deployment within one 256 MB machine and its persistent volume.
+  Do not edit `fly.toml`; keep Docker working. Ask before adding dependencies.
+- Use small commits explaining why. Changes reach `main` through PRs,
+  merged with a merge commit after CI passes; check the deployed site.
+  Preserve history.
+- Update the README when its promises change. PROCESS and reflections are
+  the owner's account. Do not independently author their personal judgements.
+  If the owner explicitly requests a draft or rewrite, label it as assisted
+  work requiring their review; never invent experience or acceptance.

@@ -5,3 +5,7 @@ Images for the top-level `README.md` go here. Link them relatively, as
 Decision records (ADRs) go in `decisions/`, numbered in the order they were
 made. Plans for features, written and approved before building, go in
 `plans/`; its README says how.
+
+Development details referenced by `CLAUDE.md` live in
+[development.md](development.md): runtime setup, data and security safeguards,
+and browser checks. Test instructions remain in `spec/README.md`.

@@ -24,6 +24,26 @@ started instead. Keep them; don't delete them.
 
 ## Your checks
 
+### Running and isolating tests
+
+- With no `APP_URL`, `pnpm check` starts a temporary app and data directory,
+  sets `ADMIN_USERS=spec-admin`, and removes them afterwards. No existing
+  app needs to be running. Never run writing tests against `.localdata` or
+  the app on port 8080 that the owner browses.
+- With `APP_URL`, tests target that app. Use a throwaway instance; admin
+  tests additionally need `SPEC_ADMIN_USER` naming one of its admins.
+- Obtain test accounts through `person()` in `spec/api.ts`; identity in
+  request bodies is ignored.
+- Spec files run concurrently against one app. Assert about the data your
+  test controls, use unique items and isolated stores where needed, and do
+  not assume unrelated posts stay unchanged. A map test once misdiagnosed
+  another spec's legitimate deletion as an app failure.
+- Behaviour changes need relevant checks in the same commit. Diagnose a
+  failing test before fixing it; correcting a faulty assertion is allowed,
+  but removing a valid product requirement just to get green is not.
+
+### Scope
+
 Everything else in `spec/` is yours to write. Any `spec/*.test.ts` runs with
 `pnpm check`, against the same running app. Some lines of a spec only a person
 can judge; those are left to the crit and the marker.

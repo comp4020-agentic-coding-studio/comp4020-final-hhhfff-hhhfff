@@ -87,6 +87,12 @@ it with strangers.
 - **My friends** pass on cheap food in chat, found by luck. So each post
   has its own link, and pasted into a chat it previews the item, price and
   how much is left; opened, it stays live like the feed.
+- **Small-web reading added during documentation review:** Ben Hoyt's
+  [The small web is beautiful](https://benhoyt.com/writings/the-small-web-is-beautiful/)
+  argues for fewer moving parts and useful content over size alone. This
+  provides a comparison for the app's neighbourhood scope; it was added
+  after the first implementation. `PROCESS.md` discusses the tension
+  between that small scope and needing enough people to keep posts correct.
 
 The shop list and the street map come from OpenStreetMap, taken once, not fetched at runtime. Each post records where the poster
 saw it, so readers can weigh it.
