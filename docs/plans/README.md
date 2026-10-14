@@ -15,6 +15,26 @@ Plans sit beside the other records:
 - `spec/` holds the tests. A plan's **automated** acceptance lines each
   become one; its **observed** lines are checked by a person and recorded.
 
+## What stops the designer writing elsewhere
+
+Not only its instructions. Its definition gives it no shell (Bash or
+PowerShell) and no Edit tool, and a PreToolUse hook in its frontmatter runs
+`.claude/hooks/designer-write-guard.mjs` before every write: anything outside
+`docs/plans/` is refused, and so is any call the hook can't read, or the hook
+failing to start (`onFailure: block`). `spec/designer-guard.test.ts` checks
+the hook and that wiring.
+
+What that does not cover, stated plainly:
+
+- Claude Code runs a project subagent's frontmatter hooks only in a folder
+  whose workspace trust I have accepted, and never in a `claude -p` session.
+  There, only the instructions and the missing tools hold.
+- The test runs the hook directly. That Claude Code calls it for a real
+  designer session has to be seen once by hand: ask the designer to write
+  outside `docs/plans/` and check it is refused.
+- It guards the designer only. The building agent can write anywhere, as it
+  must; "build only from an approved plan" stays a rule it is told.
+
 ## When a plan is needed
 
 A new feature, a change to what readers see or can do, or a change to the
