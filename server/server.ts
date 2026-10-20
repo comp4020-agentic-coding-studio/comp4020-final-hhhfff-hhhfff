@@ -54,6 +54,7 @@ import {
   type Value,
   type Viewer,
 } from "./db.ts";
+import { act, begin, isAction, logAction, record, signedIn } from "./log.ts";
 import { itemKey, searchScore, searchTerms } from "./match.ts";
 import { cleanJpeg } from "./photos.ts";
 import { type Store, STORES, storeById } from "./stores.ts";
@@ -531,6 +532,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (method === "GET" && path === "/api/me") return send(res, 200, whoIs(req));
 
   if (method === "POST" && (path === "/api/register" || path === "/api/login")) {
+    act(req, path === "/api/register" ? "register" : "login");
     const b = await readJson(req);
     const username = typeof b.username === "string" ? b.username.trim() : "";
     if (!USERNAME.test(username)) throw new HttpError(400, "username must be 3–24 letters, digits, - or _");
@@ -540,11 +542,16 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const { salt, hash } = await hashPassword(pw);
       // a name on ADMIN_USERS that registers after startup is an admin from the start
       user = createUser(username, salt, hash, ADMINS.has(username) ? "admin" : "user");
-      if (!user) throw new HttpError(409, "that username is taken");
+      if (!user) {
+        record(req, { as: username });
+        throw new HttpError(409, "that username is taken");
+      }
     } else {
       if (loginBlocked(username)) throw new HttpError(429, "too many wrong passwords, wait a minute");
       const account = accountByName(username);
       const ok = await verifyPassword(pw, (account ?? NO_SUCH_USER).salt, (account ?? NO_SUCH_USER).hash);
+      // the name only once it's known to be an account's: never a password typed in the wrong box
+      if (account) record(req, { as: account.name });
       if (!account || !ok) {
         noteFailure(username);
         throw new HttpError(401, "wrong username or password");
@@ -555,12 +562,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const token = newToken();
     const me: User = { id: user!.id, name: user!.name, role: user!.role };
     startSession(me, token, SESSION_DAYS);
+    signedIn(req, me);
     return send(res, path === "/api/register" ? 201 : 200, me, {
       "set-cookie": setCookie(req, token, SESSION_DAYS * 86_400),
     });
   }
 
   if (method === "POST" && path === "/api/logout") {
+    act(req, "logout");
     const token = tokenOf(req);
     if (token) endSession(token);
     return send(res, 200, { ok: true }, { "set-cookie": setCookie(req, "", 0) });
@@ -579,6 +588,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if (method === "POST" && path === "/api/deals") {
+    act(req, "post");
     const who = asAuthor(need(req, "post", "post a special"));
     const b = await readJson(req);
     const storeId = typeof b.storeId === "string" && storeById.has(b.storeId) ? b.storeId : null;
@@ -604,6 +614,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     );
     if ("existing" in result) {
       const { existing } = result;
+      record(req, { existing: existing.id, owner: existing.author.name });
       throw new HttpError(
         409,
         existing.author.id === who.id
@@ -612,6 +623,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         { existing },
       );
     }
+    record(req, { deal: result.created.id, store: storeId, item });
     broadcast({ type: "new", id: result.created.id });
     return send(res, 201, result.created);
   }
@@ -626,8 +638,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // only the poster (or an admin) can take a post down, whoever else has added to it
   if ((m = path.match(/^\/api\/deals\/(\d+)\/delete$/)) && method === "POST") {
+    act(req, "delete post", { deal: Number(m[1]) });
     const user = need(req, "delete-own", "delete a post");
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     if (getDeal(id)!.author.id !== user.id && !can(user.role, "delete-any")) {
       throw new HttpError(403, "only the person who posted this can delete it");
     }
@@ -637,8 +651,10 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/confirm$/)) && method === "POST") {
+    act(req, "confirm", { deal: Number(m[1]) });
     const who = asAuthor(need(req, "confirm", "confirm a post"));
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     if (getDeal(id)!.author.id === who.id) throw new HttpError(400, "that's your own post");
     const added = confirmDeal(id, who);
     if (added) broadcast({ type: "deal", id });
@@ -646,11 +662,14 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/corrections$/)) && method === "POST") {
+    act(req, "correct", { deal: Number(m[1]) });
     const who = asAuthor(need(req, "correct", "correct a post"));
     const id = dealId(m[1]);
+    record(req, { owner: getDeal(id)!.author.name });
     const b = await readJson(req);
     const field = oneOf<Field>(b.field, CORRECTABLE, "field");
     const value = fieldInput(field, b.value);
+    record(req, { field, value });
     const note = b.note === undefined || b.note === null || b.note === "" ? null : str(b.note, "note", 1, 280);
     const deal = getDeal(id)!;
     if (sameValue(field, fieldValue(deal, field), value)) throw new HttpError(400, "that's what the post already says");
@@ -670,6 +689,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     }
     // checked again as it applies, inside the same transaction as the write
     const result = proposeCorrection(id, field, value, note, who, (d) => d.nowCents < d.wasCents && !clash(d));
+    record(req, { applied: result.applied, votes: result.votes });
     broadcast({ type: "deal", id });
     if (deal.author.id !== who.id) tell(deal.author.id, { type: "notice" });
     return send(res, result.applied ? 200 : 201, { ...result, deal: getDeal(id) });
@@ -685,10 +705,12 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   }
 
   if ((m = path.match(/^\/api\/deals\/(\d+)\/stock$/)) && method === "POST") {
+    act(req, "report stock", { deal: Number(m[1]) });
     const by = asAuthor(need(req, "stock", "report stock"));
     const id = dealId(m[1]);
     const b = await readJson(req);
     const stock = oneOf<Stock>(b.stock, STOCK_LEVELS, "stock");
+    record(req, { owner: getDeal(id)!.author.name, stock });
     const wait = stockWait(id, by);
     if (wait) throw new HttpError(429, `You just reported this. Try again in ${wait}s.`, { retryAfter: wait });
     reportStock(id, stock, by);
@@ -700,6 +722,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     const id = dealId(m[1]);
     if (method === "GET") return send(res, 200, listComments(id, viewer(req)));
     if (method === "POST") {
+      act(req, "comment", { deal: id, owner: getDeal(id)!.author.name });
       const user = need(req, "comment", "comment");
       const b = await readJson(req);
       const body = str(b.body, "comment", 1, 500);
@@ -710,6 +733,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
         if (!to || to.dealId !== id) throw new HttpError(404, "that comment isn't here any more");
       }
       const newId = addComment(id, body, asAuthor(user), to);
+      record(req, { comment: newId, ...(to ? { replyTo: to.id, replyToAuthor: to.author.name } : {}) });
       broadcast({ type: "deal", id });
       return send(res, 201, listComments(id, viewer(req)).find((c) => c.id === newId));
     }
@@ -717,9 +741,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // --- a deal's shelf photo: the picture, and adding, removing, reporting and reviewing it
   if ((m = path.match(/^\/api\/deals\/(\d+)\/photo(?:\/(delete|report|review))?$/))) {
+    act(req, `${m[2] ?? "add"} photo`, { deal: Number(m[1]) });
     const id = dealId(m[1]);
     const deal = getDeal(id)!;
     const action = m[2];
+    record(req, { owner: deal.author.name });
 
     if (method === "GET" && !action) {
       const photo = photoData(id);
@@ -771,6 +797,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const user = need(req, "report", "report a photo");
       if (deal.author.id === user.id) throw new HttpError(400, "that's your own photo");
       const { added, hidden, admins } = reportPhoto(id, asAuthor(user));
+      record(req, { counted: added, hidden });
       if (hidden) broadcast({ type: "deal", id });
       for (const admin of admins) tell(admin, { type: "notice" });
       return send(res, added ? 201 : 200, { reported: true, deal: getDeal(id) });
@@ -779,6 +806,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     need(req, "moderate", "review a reported photo");
     const b = await readJson(req);
     const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    record(req, { decision });
     if (!reviewPhoto(id, decision)) throw new HttpError(409, "nothing to review on that photo");
     broadcast({ type: "deal", id });
     return send(res, 200, getDeal(id));
@@ -792,11 +820,13 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 
   // a comment's own actions: delete, like, report, and an admin's review
   if ((m = path.match(/^\/api\/comments\/(\d+)\/(delete|like|report|review)$/)) && method === "POST") {
+    act(req, `${m[2]} comment`, { comment: Number(m[1]) });
     const comment = getComment(Number(m[1]));
     if (!comment || !getDeal(comment.dealId)) throw new HttpError(404, "no such comment");
     const id = comment.id;
     const dealOf = comment.dealId;
     const action = m[2];
+    record(req, { deal: dealOf, owner: comment.author.name });
 
     if (action === "delete") {
       const user = need(req, "delete-own", "delete a comment");
@@ -813,6 +843,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
       const b = await readJson(req);
       if (typeof b.liked !== "boolean") throw new HttpError(400, "liked must be true or false");
+      record(req, { liked: b.liked });
       if (likeComment(id, asAuthor(user), b.liked)) broadcast({ type: "deal", id: dealOf });
       return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
     }
@@ -821,6 +852,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const user = need(req, "report", "report a comment");
       if (comment.author.id === user.id) throw new HttpError(400, "that's your own comment");
       const { added, hidden, admins } = reportComment(id, asAuthor(user));
+      record(req, { counted: added, hidden });
       if (hidden) broadcast({ type: "deal", id: dealOf });
       for (const admin of admins) tell(admin, { type: "notice" }); // their inbox changed
       return send(res, added ? 201 : 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
@@ -829,6 +861,7 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     need(req, "moderate", "review a reported comment");
     const b = await readJson(req);
     const decision = oneOf(b.decision, ["restore", "keep"] as const, "decision");
+    record(req, { decision });
     if (!reviewComment(id, decision)) throw new HttpError(409, "nothing to review on that comment");
     broadcast({ type: "deal", id: dealOf });
     return send(res, 200, listComments(dealOf, viewer(req)).find((c) => c.id === id));
@@ -858,12 +891,25 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
 }
 
 const server = createServer((req, res) => {
+  // who did what, for `flyctl logs` (server/log.ts): every change asked for, refused ones too
+  let refusal: string | undefined;
+  const path = new URL(req.url ?? "/", "http://localhost").pathname;
+  if (isAction(req.method ?? "GET", path)) {
+    begin(req, path, whoIs(req));
+    // on close, not finish, so a request whose answer never got through is still logged
+    res.once("close", () => {
+      const cut = res.writableFinished ? undefined : "closed before the answer was sent";
+      logAction(req, res.statusCode, refusal ?? cut);
+    });
+  }
   route(req, res).catch((err: unknown) => {
     if (err instanceof HttpError) {
+      refusal = err.message;
       if (req.url?.startsWith("/api/")) return send(res, err.status, { error: err.message, ...err.extra });
       res.writeHead(err.status, { "content-type": "text/plain; charset=utf-8" });
       return void res.end(err.message);
     }
+    refusal = "server error";
     console.error(err);
     if (!res.headersSent) send(res, 500, { error: "something went wrong on our end" });
     else res.end();
