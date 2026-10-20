@@ -61,7 +61,9 @@ stripped, gone with their post, hidden after ten reports); comment replies, like
 the ten-report hide with an admin's review and inbox, including reports at once;
 guests being read-only; logins across browsers; the login page
 returning only to this site's own pages; no
-password or session token leaking; typo-tolerant search; every live post
+password or session token leaking; a server log of who did what, refusals
+included, holding no password, session token or anything anyone wrote;
+typo-tolerant search; every live post
 reachable across pages; live updates reaching an open page; the live
 badge; who-is-looking counts (one per person however many tabs, gone when
 they leave, never naming anyone, and set only by the page's own person);

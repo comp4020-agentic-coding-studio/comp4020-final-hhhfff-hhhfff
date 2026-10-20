@@ -38,6 +38,15 @@ live updates or UI behaviour.
   Stock reports are limited to one per account per post per minute.
 - Store prices as integer cents and display dollars. Date boundaries
   use Canberra's date.
+- Every change someone asks for (a POST to `/api/`, except the page's own
+  `/api/watch` and `/api/notifications`) writes one JSON action line to
+  stdout through `server/log.ts`: the account behind the session cookie,
+  what they did, to which post or comment and whose, and the answer,
+  refusals included. Read it with `mise exec -- flyctl logs -a
+  comp4020-final-hhhfff-hhhfff`. A new action route calls `act()`. The log
+  holds identifiers and fixed words, never a password, hash, session token,
+  or a comment's or note's text, and names a login only once it matches an
+  account (`spec/log.test.ts`).
 - Keep the live protocol aligned with the ADRs in `docs/decisions/`:
   send change signals and identifiers, not full posts or credentials,
   and fetch current data through normal read routes. Cap listeners
