@@ -275,7 +275,8 @@ async function loadFeed(motion) {
   feed.setAttribute("aria-busy", "true");
   if (!feed.children.length) status.textContent = query() ? "Searching…" : "Loading specials…";
   try {
-    const { data, headers } = await apiResponse(feedPath());
+    const path = feedPath();
+    const { data, headers } = await apiResponse(path);
     if (mine !== feedRequest) return;
     total = Number(headers.get("x-total-count") ?? data.length);
     // past the end (posts went, or an old link): the last page there is
@@ -286,6 +287,7 @@ async function loadFeed(motion) {
     }
     const show = () => {
       deals = data;
+      shownPath = path; // the columns keep their cards while this stays the same
       clearWaiting(); // whatever was waiting is in this answer, if it fits
       renderFeed();
     };
@@ -477,6 +479,9 @@ function renderFeed() {
   $("#post-first").hidden = !!q;
   $("#clear-search").hidden = !q;
   showChains();
+  // now, after the sidebar (which can change the number of columns), not when
+  // the list's observer gets to it, so a jump to a card finds it in place
+  layOutFeed();
 }
 
 // --- pages: previous, numbers (the first, the last and those either side of
@@ -571,6 +576,73 @@ function showChains() {
 
 // the same toggle as the post button, so a guest is asked to log in rather than shown a form
 $("#post-first").addEventListener("click", () => toggle.click());
+
+// --- the feed in columns, as a waterfall. With two or three columns (the
+// stylesheet's --lanes) each card goes under the shortest column at its own
+// height, so opening one card's comments pushes down only the cards under it,
+// never the card beside it. A card keeps its column while the page shows the
+// same specials, so nothing jumps sideways under the reader: a post selling
+// out sinks to the bottom of its own column, and one arriving tops whichever
+// column is shortest. Another page, store or search deals them out afresh.
+// The cards stay in the feed's order, newest first, for a keyboard or screen
+// reader; .feed.waterfall in styles.css stacks each column's cards in that
+// order. One column (a phone) is a plain list.
+
+let shownPath = ""; // feedPath() of the answer on the page, set by loadFeed
+let laneOf = new Map(); // deal id -> its column (0 the left), for the cards on the page
+let lanesFor = ""; // the number of columns and the shownPath laneOf was dealt for
+
+function layOutFeed() {
+  const feed = $("#feed");
+  // hidden (the store list's page), every card measures 0 tall; the cards
+  // say when they have a size again, and are dealt out then
+  if (feed.closest("[hidden]")) return;
+  const lanes = Number(getComputedStyle(feed).getPropertyValue("--lanes")) || 1;
+  const cards = [...feed.children].filter((li) => li.classList.contains("deal"));
+  feed.classList.toggle("waterfall", lanes > 1 && cards.length > 0);
+  if (!feed.classList.contains("waterfall")) return;
+  if (`${lanes} ${shownPath}` !== lanesFor) laneOf = new Map();
+  lanesFor = `${lanes} ${shownPath}`;
+  // a card's rows hold it and the gap under it; every height is read before
+  // anything is written, so the browser lays the page out once
+  const style = getComputedStyle(feed); // now with the waterfall's rows
+  const [row, gap] = [parseFloat(style.gridAutoRows), parseFloat(style.columnGap) || 0];
+  const rows = cards.map((li) => Math.ceil((li.offsetHeight + gap) / row));
+  const tall = new Array(lanes).fill(0); // each column's height, in rows
+  const kept = new Map();
+  cards.forEach((li, i) => {
+    const lane = laneOf.get(li.dataset.id);
+    if (lane === undefined) return;
+    kept.set(li.dataset.id, lane);
+    tall[lane] += rows[i];
+  });
+  cards.forEach((li, i) => {
+    let lane = kept.get(li.dataset.id);
+    if (lane === undefined) {
+      lane = tall.indexOf(Math.min(...tall));
+      kept.set(li.dataset.id, lane);
+      tall[lane] += rows[i];
+    }
+    // only what changed, so a card opening frame by frame restyles just itself
+    if (li.style.getPropertyValue("--lane") !== String(lane + 1)) li.style.setProperty("--lane", lane + 1);
+    if (li.style.getPropertyValue("--rows") !== String(rows[i])) li.style.setProperty("--rows", rows[i]);
+  });
+  laneOf = kept;
+}
+
+// Laid out again whenever a card changes size: its comments open, a count
+// appears, or a resized window rewraps it, which is also how a breakpoint
+// changing the number of columns is noticed. A resize is answered before the
+// browser paints, so nothing is seen out of place. renderFeed lays out as it
+// builds; a card swapped or removed on its own is caught as the list changes.
+const cardSizes = new ResizeObserver(layOutFeed);
+new MutationObserver((changes) => {
+  for (const change of changes) {
+    for (const li of change.removedNodes) if (li instanceof Element) cardSizes.unobserve(li);
+    for (const li of change.addedNodes) if (li instanceof Element) cardSizes.observe(li);
+  }
+  layOutFeed();
+}).observe($("#feed"), { childList: true });
 
 // --- search: typed words go to the server (see searchDeals in server/server.ts),
 // a moment after typing stops. The words stay in the address, so a search can

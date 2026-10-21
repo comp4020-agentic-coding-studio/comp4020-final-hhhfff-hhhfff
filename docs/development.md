@@ -57,6 +57,11 @@ live updates or UI behaviour.
 - The feed precedes the folded posting form. The map opens by default,
   remembers closing on the device, and stays short enough for the first
   special to remain visible on the first phone screen.
+- From two columns up the feed is a waterfall, not rows: each card goes
+  under the shortest column at its own height, so opening one card's
+  comments or correction moves only the cards under it, and a card keeps
+  its column while the page shows the same specials. The owner chose this
+  over lining cards up in rows (`spec/waterfall.test.ts`).
 - Guests' cards are read-only; the page explains how to log in, and its
   links to `/login` bring the reader back to where they were.
   Sold-out posts sort after the rest. Show a loading state before data

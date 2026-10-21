@@ -1812,14 +1812,6 @@ button.danger {
   to { background-position: -100% 0; }
 }
 
-/* in columns a skeleton spans the card's rows like a real card does */
-@media (min-width: 44rem) {
-  .feed > .skeleton {
-    grid-row: span 12;
-    margin-bottom: 0.75rem;
-  }
-}
-
 /* Turning a page slides the feed (forward from the right, back from the
    left); changing store cross-fades. Only the feed moves, never the header. */
 #feed {
@@ -2470,48 +2462,38 @@ button.danger {
     margin-inline: auto;
   }
 
-  /* equal columns filling the centred .wrap, the same width as the post button */
+  /* equal columns filling the centred .wrap, the same width as the post
+     button; --lanes tells app.js how many there are */
   .feed {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --lanes: 2;
+    grid-template-columns: repeat(var(--lanes), minmax(0, 1fr));
     align-items: start;
+  }
+
+  /* A waterfall, like a photo wall: app.js gives each card a column (--lane)
+     and as many 2px rows (--rows) as its own height and the gap under it
+     take, and the grid stacks each column's cards in the feed's order (dense,
+     so a card goes straight under the one above it in its column). A card
+     that grows pushes down only the cards under it, never the one beside it. */
+  .feed.waterfall {
+    grid-auto-rows: 2px;
+    grid-auto-flow: dense;
     row-gap: 0;
   }
 
-  /* Cards side by side share their inner rows (subgrid), so the price, the
-     stock buttons and the rest line up across a row however long each
-     card's text runs. Each part has a fixed row; a part a card doesn't show
-     leaves its row empty rather than pulling the rest up. The gap between
-     card rows is each card's own margin, which subgrid adds to its last row. */
-  .deal {
-    display: grid;
-    grid-row: span 12;
-    grid-template-rows: subgrid;
-    row-gap: 0;
-    align-self: stretch;
-    align-content: start;
-    margin-bottom: 0.75rem;
+  .feed.waterfall > .deal {
+    grid-column: var(--lane, 1);
+    grid-row-end: span var(--rows, 1);
   }
 
-  /* the store always goes under the item, so a short name doesn't sit
-     beside it and leave a gap that a long name's card fills */
-  .deal > .deal-head { grid-row: 1; flex-direction: column; justify-content: flex-start; }
-  .deal > .prices { grid-row: 2; }
-  .deal > .photo-row { grid-row: 3; }
-  .deal > .meta { grid-row: 4; }
-  .deal > .stock,
-  .deal > .stock-read { grid-row: 5; }
-  .deal > .stock-by { grid-row: 6; }
-  .deal > .trust { grid-row: 7; }
-  .deal > .history { grid-row: 8; }
-  .deal > .pending { grid-row: 9; }
-  .deal > .correct { grid-row: 10; }
-  .deal > .comments { grid-row: 11; }
-  .deal > .delete { grid-row: 12; }
+  /* in a column the store goes under the item, so a short name and a long
+     one read the same way */
+  .deal > .deal-head { flex-direction: column; justify-content: flex-start; }
 }
 
 @media (min-width: 64rem) {
   .feed {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --lanes: 3;
   }
 
   /* with posts, the chains' links become a sidebar and the feed keeps two
@@ -2524,7 +2506,7 @@ button.danger {
   }
 
   .feed-layout.has-side .feed {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    --lanes: 2;
   }
 
   .feed-layout.has-side .chains {

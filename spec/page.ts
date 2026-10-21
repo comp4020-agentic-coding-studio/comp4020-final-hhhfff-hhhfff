@@ -59,10 +59,34 @@ export async function openPage(as: Person | undefined, { path = "/", network }: 
     const res = await fetch(new URL(input, baseUrl), { ...init, headers: { ...init.headers, ...cookie } });
     return network ? network(new URL(input, baseUrl).pathname, init, res) : res;
   };
-  // what jsdom doesn't have; none of it matters here
+  // jsdom lays nothing out, so nothing changes size by itself: a test says
+  // when something did with resized(el), and whatever observes it is told,
+  // as a browser would tell it
+  const observers: FakeResizeObserver[] = [];
+  class FakeResizeObserver {
+    targets = new Set<Element>();
+    callback: (entries: { target: Element }[]) => void;
+    constructor(callback: (entries: { target: Element }[]) => void) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe(el: Element) {
+      this.targets.add(el);
+    }
+    unobserve(el: Element) {
+      this.targets.delete(el);
+    }
+    disconnect() {
+      this.targets.clear();
+    }
+  }
+  const resized = (el: Element) => {
+    for (const o of observers) if (o.targets.has(el)) o.callback([{ target: el }]);
+  };
+  // the rest of what jsdom doesn't have; none of it matters here
   Object.assign(window, {
     EventSource: FakeEventSource,
-    ResizeObserver: class { observe() {} },
+    ResizeObserver: FakeResizeObserver,
     IntersectionObserver: class { observe() {} },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
     scrollTo() {},
@@ -80,7 +104,7 @@ export async function openPage(as: Person | undefined, { path = "/", network }: 
   if (as) await until("the login", () => !doc.querySelector<HTMLButtonElement>("#logout")!.hidden);
   // this page's stream, not one an earlier page in the same file left behind
   await until("the live stream", () => FakeEventSource.last !== before && !!FakeEventSource.last.listeners.message);
-  return { window, doc };
+  return { window, doc, resized };
 }
 
 // The login page, /login, with login.js running against the app. jsdom can't
