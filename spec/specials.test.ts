@@ -1,14 +1,18 @@
-import { describe, expect, it } from "vitest";
-import { call, person, special, wholeFeed, writes } from "./api.ts";
+import { beforeAll, describe, expect, it } from "vitest";
+import { type Person, call, person, special, wholeFeed, writes } from "./api.ts";
 
 // Crit 8's "it's alive": a stranger can do the core thing (post a special,
 // report stock, comment) and find their trace still there when they come back.
 // "Coming back" here is a fresh request from someone else entirely.
 
-const poster = await person("spec poster");
-const passerby = await person("spec passerby");
-
 describe.skipIf(!writes)("a stranger's trace is still there when they come back", () => {
+  // registered in beforeAll, which a skipped block never runs (see search.test.ts)
+  let poster: Person, passerby: Person;
+  beforeAll(async () => {
+    poster = await person("spec poster");
+    passerby = await person("spec passerby");
+  });
+
   it("a posted special shows up for everyone, under its store", async () => {
     const posted = await call("/api/deals", special(poster));
     expect(posted.status).toBe(201);
