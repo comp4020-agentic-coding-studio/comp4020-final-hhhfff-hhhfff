@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { call, person, special, writes } from "./api.ts";
+import { beforeAll, describe, expect, it } from "vitest";
+import { type Person, call, person, special, writes } from "./api.ts";
 
 // Search runs on the server (/api/deals?q=), so it finds posts past the feed's
 // first 200. Every word must match the item or the shop (name, suburb or kind:
@@ -23,25 +23,33 @@ const search = async (q: string, store?: string) => {
   return ids(res.data);
 };
 
-describe.skipIf(!writes)("searching the specials", async () => {
-  const poster = await person("spec searcher");
+// The posts go up in beforeAll, not in the describe body: vitest runs a
+// skipped describe's body to collect its tests, so setup there would post to
+// the live site, as it did on 2026-10-25. A skipped block's beforeAll never runs.
+describe.skipIf(!writes)("searching the specials", () => {
+  let poster: Person;
   const post = async (item: string, storeId: string) => {
     const res = await call("/api/deals", special(poster, { item: `${item} ${tag}`, storeId }));
     expect(res.status).toBe(201);
     return res.data.id as number;
   };
-  const timTams = await post("Tim Tams 200g", "coles-civic");
-  const dumplings = await post("Pork Dumplings", "daily-market-childers");
-  const oatMilk = await post("Oat Milk 1L", "coles-civic");
-  const wrappers = await post("Dumpling wrappers", "aldi-civic");
-  const jiaozi = await post("饺子", "swan-dickson");
-  const coke = await post("Coca-Cola 1.25L", "aldi-civic");
-  const chocolate = await post("Chocolate block", "aldi-civic");
-  const bread = await post("Bread rolls", "aldi-civic");
-  const beans = await post("Broad beans", "aldi-civic");
-  // someone else: posting counts as the poster's stock report for the minute
-  const shopper = await person("spec shopper");
-  expect((await call(`/api/deals/${oatMilk}/stock`, { stock: "gone", author: shopper.as })).status).toBe(200);
+  let timTams: number, dumplings: number, oatMilk: number, wrappers: number, jiaozi: number;
+  let coke: number, chocolate: number, bread: number, beans: number;
+  beforeAll(async () => {
+    poster = await person("spec searcher");
+    timTams = await post("Tim Tams 200g", "coles-civic");
+    dumplings = await post("Pork Dumplings", "daily-market-childers");
+    oatMilk = await post("Oat Milk 1L", "coles-civic");
+    wrappers = await post("Dumpling wrappers", "aldi-civic");
+    jiaozi = await post("饺子", "swan-dickson");
+    coke = await post("Coca-Cola 1.25L", "aldi-civic");
+    chocolate = await post("Chocolate block", "aldi-civic");
+    bread = await post("Bread rolls", "aldi-civic");
+    beans = await post("Broad beans", "aldi-civic");
+    // someone else: posting counts as the poster's stock report for the minute
+    const shopper = await person("spec shopper");
+    expect((await call(`/api/deals/${oatMilk}/stock`, { stock: "gone", author: shopper.as })).status).toBe(200);
+  });
 
   it("finds an item by a whole word, its start, or across case, punctuation and spaces", async () => {
     for (const q of [`tim ${tag}`, `TIM-TAMS ${tag}`, `tam ${tag}`, `timtams ${tag}`, `200 g ${tag}`]) {

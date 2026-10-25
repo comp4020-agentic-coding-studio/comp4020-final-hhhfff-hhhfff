@@ -31,7 +31,12 @@ started instead. Keep them; don't delete them.
   app needs to be running. Never run writing tests against `.localdata` or
   the app on port 8080 that the owner browses.
 - With `APP_URL`, tests target that app. Use a throwaway instance; admin
-  tests additionally need `SPEC_ADMIN_USER` naming one of its admins.
+  tests additionally need `SPEC_ADMIN_USER` naming one of its admins. Do
+  not point it at the live site: a run there once left 18 test specials in
+  the real feed, because setup in a skipped `describe` body still runs.
+- Put writes inside a test or a `beforeAll`, gated by `writes`, never in a
+  `describe` body or at the top of a file. Against anything but a local
+  address, `spec/no-writes.ts` turns any write into a failure.
 - Obtain test accounts through `person()` in `spec/api.ts`; identity in
   request bodies is ignored.
 - Spec files run concurrently against one app. Assert about the data your
