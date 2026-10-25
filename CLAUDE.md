@@ -30,7 +30,7 @@ with that argument; ask the owner before changing it.
 - Let one person's repeated actions count as several people's agreement.
   Preserve the correction and reporting rules in the README.
 - Lose persistent data on restart or redeploy, or let tests modify the data
-  the owner uses.
+  the owner uses, locally or on the live site.
 
 ## What the pages must hold to
 

@@ -7,7 +7,9 @@ export const baseUrl = inject("baseUrl");
 
 // Tests that write run against a local app or CI's throwaway container,
 // never the live site, so real users never see test specials in their feed.
-// SPEC_WRITES=1 overrides that, on purpose only.
+// SPEC_WRITES=1 overrides that, on purpose only. Gate writes with it *inside*
+// a test or a beforeAll: a skipped describe's body still runs. no-writes.ts
+// refuses any write that slips past this anyway.
 export const writes =
   ["localhost", "127.0.0.1"].includes(new URL(baseUrl).hostname) || process.env.SPEC_WRITES === "1";
 
