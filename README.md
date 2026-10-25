@@ -1,117 +1,76 @@
 # discountShow
 
-Supermarket specials near ANU, spotted and kept honest by the students who
-shop there.
+Supermarket specials near ANU, shared and updated by the students who shop there.
 
 ## What "good" means here
 
-Coles and Aldi publish their specials weeks ahead. The small shops students
-actually rely on, the Asian grocers and convenience stores around Civic,
-Acton and Dickson, mostly have no website. I work at one, Daily Market.
-When stock nears its expiry date, the shop marks it down on the spot, and
-nothing announces it. A bargain can be gone within the hour, and a student
-who would grab it has no way to find out.
+I work at Daily Market, where stock approaching expiry can be marked down
+without advance notice. Students nearby may miss it, or arrive after it
+sells out. discountShow is good if a student can **trust a post enough to
+walk to the shop**. A useful post needs a believable price, a location and
+current stock information.
 
-So discountShow is good if a student can **trust a single post enough to
-walk to the shop for it**. A stale price or empty shelf costs them the
-trip, and after twice they stop looking. The design serves that standard,
-not the number of posts:
+Five rules support that:
 
-1. **One live post per item per store.** A repeat, from anyone, is refused
-   and points at the existing post, so the feed never shows conflicting
-   prices.
-2. **The crowd corrects posts.** Anyone can confirm a post ("same and
-   correct"). If the price, item or end date is wrong, three different
-   people proposing the same fix rewrites the post and the poster is told.
-   The poster's own correction applies at once.
-3. **Stock is a first-class fact.** Anyone can report plenty, some, few or
-   gone, because "gone" is how a markdown usually ends. One report per
-   person per post a minute, and recent reports stay visible.
-4. **Specials are cheaper, or they are not specials.** No post or
-   correction can put a special at or above the usual price.
-5. **"Gone" arrives before the walk.** An open page shows changes to the
-   posts on it, and new posts on page one, within moments. A badge says
-   whether it is live, and a post or store says how many others have it
-   open, as a count, never who: three others eyeing a "few left" markdown
-   tell a reader to hurry, or not to bother. On the map, a store ripples
-   when something is posted or its stock is reported, and shrinks when it
-   has fewer specials, so news nearby shows before a reader scrolls to it.
+1. **One live post per item per store.** Repeats point to the existing post,
+   including when different people submit at once.
+2. **The crowd corrects posts.** Readers confirm information or propose fixes.
+   Three accounts agreeing on a correction apply it; the poster can correct
+   their own post immediately.
+3. **Stock is a first-class fact.** Readers report plenty, some, few or gone.
+   Recent reports remain visible, limited to one per account per post per minute.
+4. **Specials are cheaper, or they are not specials.** Prices and corrections
+   must stay below the usual price.
+5. **"Gone" arrives before the walk.** Visible posts update live. New posts
+   wait behind a notification so the feed stays steady while someone reads.
 
-Comments are where readers ask "still there?" and answer each other: one
-level of replies, likes (not your own, one each), and deleting your own,
-which takes its replies with it. A comment ten different people report is
-hidden until an admin restores it or keeps it hidden, so a few people can't
-silence one they merely disagree with, and an admin decides rather than the
-crowd alone. Every reported comment waits in an admin-only inbox until it is
-restored, hidden or deleted, so none is lost when a notice is dismissed.
+Browse without an account; choose Log in to register or sign in before
+contributing. Only the poster or an admin can delete a post. Optional
+shelf-tag photos provide evidence for readers to judge, with metadata removed.
+Comments support questions and replies. Ten accounts reporting a comment or
+photo hide it pending admin review.
 
-Reading is free; writing needs an account. I first used a nickname and a
-browser-held key, since friction matters in an aisle. But the rules above
-count *people*, and a new browser was a new person, so three "different"
-people could be one. Now the same login in any browser is the same person.
-Only the poster, or an admin, can delete a post.
+The map shows nearby shops and activity. Live status and anonymous
+who-is-looking counts give context without naming readers. Each post and
+store has a shareable address so information can travel through friends' chats.
 
 ## What is enforced and what is judged
 
-Enforced, by tests in `spec/` against the running app: duplicate refusal,
-including simultaneous posts; the confirmation and three-person correction
-rules; poster-only delete; admins only from `ADMIN_USERS`; the price check;
-the stock-report limit; shelf photos (poster only, JPEG only, metadata
-stripped, gone with their post, hidden after ten reports); comment replies, likes, deleting with replies, and
-the ten-report hide with an admin's review and inbox, including reports at once;
-guests being read-only; logins across browsers; the login page
-returning only to this site's own pages; no
-password or session token leaking; a server log of who did what, refusals
-included, holding no password, session token or anything anyone wrote;
-typo-tolerant search; every live post
-reachable across pages; live updates reaching an open page; the live
-badge; who-is-looking counts (one per person however many tabs, gone when
-they leave, never naming anyone, and set only by the page's own person);
-the map's ripple for a post or stock report and shrink for a sold-out or
-deleted special, and no ripple for a comment; and each post's
-and each store's own address, whose link preview shows the item, price,
-store and stock, or the store and how many specials it has live.
+**Enforced:** tests in `spec/` check duplicate and price rules, confirmations,
+corrections, stock-report limits, account permissions and private data handling.
+They cover live updates, search and pagination, share links, photo handling
+and moderation. Server action logs identify actions and refusals without
+passwords, session tokens or comment text.
 
-Judged, by a person: whether the problem is real, which rests on my own
-experience and not a survey; whether the feed scans quickly on a phone;
-whether "few" means anything to a hungry reader; whether "2 others
-looking" makes someone hurry or just feels watched; and whether a ripple
-on the map is noticed without being a distraction. I have not yet tested
-it with strangers.
+**Judged:** whether students trust posts enough to travel, understand stock
+labels and find the page useful on a phone. During crit10, two classmates
+posted, commented and changed stock; I could see updates on my side. One
+noticed that expanding a card left wasted space beside it. That feedback
+led to a waterfall layout. This small exercise does not establish sustained
+use or whether people find reader counts and map animations helpful.
 
 ## Sources and what I left out
 
-- **The big chains' specials pages** cover only their own shops; the feed
-  only links to them.
-- **Xiaohongshu (RedNote).** Students share bargains there, but posts are
-  scattered and rarely live.
-- **PetrolSpy**, where drivers report fuel prices for strangers, is the
-  model for crowd-reported prices here.
-- **My friends** pass on cheap food in chat, found by luck. So each post
-  has its own link, and pasted into a chat it previews the item, price and
-  how much is left; opened, it stays live like the feed.
-- **Small-web reading added during documentation review:** Ben Hoyt's
-  [The small web is beautiful](https://benhoyt.com/writings/the-small-web-is-beautiful/)
-  argues for fewer moving parts and useful content over size alone. This
-  provides a comparison for the app's neighbourhood scope; it was added
-  after the first implementation. `PROCESS.md` discusses the tension
-  between that small scope and needing enough people to keep posts correct.
+[Coles](https://www.coles.com.au/on-special) and
+[ALDI](https://www.aldi.com.au/) cover their own offers.
+[Xiaohongshu](https://www.xiaohongshu.com/explore) showed me students sharing
+bargains, but scattered across posts.
+[PetrolSpy](https://petrolspy.com.au/) supplied a model for crowd-reported
+prices. Shop and street-map data come from an
+[OpenStreetMap](https://www.openstreetmap.org/) snapshot.
 
-The shop list and the street map come from OpenStreetMap, taken once, not fetched at runtime. Each post records where the poster
-saw it, so readers can weigh it.
+Ben Hoyt's [The small web is beautiful](https://benhoyt.com/writings/the-small-web-is-beautiful/)
+supports simple architecture and fewer dependencies, fitting the single-process
+SQLite stack. Robin Sloan's
+[An app can be a home-cooked meal](https://www.robinsloan.com/notes/home-cooked-app/)
+describes software tailored to his family. I take it as a case for serving
+a particular group well. The ANU focus comes from my work experience;
+an open feed still needs participation and trust. With few contributors,
+three-person corrections may remain unresolved.
 
-A post may also carry one photo of the shelf tag. I first left photos out
-as friction and a claim the app cannot check. But a markdown sticker shows
-the price, the item and often how much is left in one glance, which is
-exactly what a reader weighs before the walk, and it stays optional, so
-nobody in a hurry is slowed. The app still cannot check a photo; it gives
-readers evidence to judge, like where the poster saw it. The phone shrinks
-and re-encodes it before sending, and the server takes only a JPEG and
-strips its metadata, so it never reveals where it was taken. Ten people
-reporting a photo hide it until an admin looks, and it goes when its post
-is deleted or a week after the special ends.
-
-I chose not to build email login, password reset, receipt photos,
-price-history charts or website scraping: each adds friction or a claim
-the app cannot check, and the shops that matter most have no website.
-At most 300 pages can watch live at once.
+I prioritise current price and stock over price-history charts. Scraping
+would miss small shops without websites; receipt photos show past purchases,
+not whether an offer is still available. Optional shelf-tag photos are more
+relevant to that decision, though still unverified. Email login and password
+reset remain outside the current development scope; there is no self-service
+account recovery. At most 300 pages can watch live at once.
